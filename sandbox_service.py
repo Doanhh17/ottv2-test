@@ -13,6 +13,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
+import config
+
 
 app = FastAPI(title="OTTv2 isolated bot worker")
 MAX_JOB_BYTES = 4 * 100 * 1024 + 65_536
@@ -89,7 +91,7 @@ async def execute(operation: str, request: Request) -> JSONResponse:
     ]
     try:
         return_code, output, output_exceeded = await run_in_threadpool(
-            _run_docker_job, command, raw_body
+            _run_docker_job, command, raw_body, _job_timeout_seconds(operation)
         )
     except FileNotFoundError:
         return JSONResponse({"error": "Docker CLI was not found on the worker host"}, status_code=503)
@@ -114,6 +116,7 @@ async def execute(operation: str, request: Request) -> JSONResponse:
 def _run_docker_job(
     command: list[str],
     request_body: bytes,
+    timeout_seconds: float,
 ) -> tuple[int, bytes, bool]:
     """Run Docker while keeping container output bounded in host memory."""
     process = subprocess.Popen(
@@ -145,7 +148,7 @@ def _run_docker_job(
     try:
         process.stdin.write(request_body)
         process.stdin.close()
-        return_code = process.wait(timeout=50)
+        return_code = process.wait(timeout=timeout_seconds)
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait()
@@ -159,3 +162,13 @@ def _run_docker_job(
         reader.join()
         process.stdout.close()
     return return_code, bytes(output), output_exceeded.is_set()
+
+
+def _job_timeout_seconds(operation: str) -> float:
+    """Leave room for both players' bot budgets and worker startup in full games."""
+    if operation == "game":
+        return (
+            2 * (config.BOT_GAME_TIMEOUT_SECONDS + config.BOT_STARTUP_TIMEOUT_SECONDS)
+            + 20
+        )
+    return 50.0

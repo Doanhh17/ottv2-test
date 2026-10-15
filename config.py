@@ -19,7 +19,7 @@ from typing import Final
 BOARD_SIZE: Final[int] = 9
 PLAYERS: Final[tuple[int, int]] = (1, 2)
 INITIAL_PLAYER: Final[int] = 1
-MAX_PLIES: Final[int] = 150
+MAX_PLIES: Final[int] = 300
 PIECE_TYPES: Final[tuple[str, str, str]] = ("R", "S", "P")
 PIECE_BEATS: Final[dict[str, str]] = {"R": "S", "S": "P", "P": "R"}
 MOVE_OFFSETS: Final[tuple[tuple[int, int], ...]] = tuple(
@@ -42,13 +42,14 @@ INITIAL_LAYOUT_P1: Final[tuple[tuple[tuple[int, int], str], ...]] = (
 )
 
 BOT_MOVE_TIMEOUT_SECONDS: Final[float] = 30.0
-BOT_GAME_TIMEOUT_SECONDS: Final[float] = 30.0
+BOT_GAME_TIMEOUT_SECONDS: Final[float] = 60.0
+BOT_STARTUP_TIMEOUT_SECONDS: Final[float] = 15.0
 BOT_MEMORY_LIMIT_BYTES: Final[int] = 256 * 1024 * 1024
 BOT_FILE_SIZE_BYTES: Final[int] = 100 * 1024
 BOT_MAX_OPEN_FILES: Final[int] = 16
 BOT_MAX_PROCESSES: Final[int] = 1
-BOT_CPU_SOFT_LIMIT_SECONDS: Final[int] = 1
-BOT_CPU_HARD_LIMIT_SECONDS: Final[int] = 2
+BOT_CPU_SOFT_LIMIT_SECONDS: Final[int] = 60
+BOT_CPU_HARD_LIMIT_SECONDS: Final[int] = 61
 BOT_MAX_AST_NODES: Final[int] = 20_000
 BOT_RANDOM_SEED: Final[int] = 20_260_415
 BOT_ALLOWED_IMPORTS: Final[frozenset[str]] = frozenset(
@@ -107,7 +108,7 @@ TIMEZONE_NAME: Final[str] = "Asia/Ho_Chi_Minh"
 TOURNAMENT_START_HOUR: Final[int] = 1
 TOURNAMENT_END_HOUR: Final[int] = 5
 LEADERBOARD_PUBLISH_HOUR: Final[int] = 6
-REPLAY_QUOTA_RATIO: Final[float] = 0.25
+REPLAY_QUOTA_RATIO: Final[float] = 1.0
 REPLAY_QUOTA_MAX: Final[int] = 5
 REPLAY_PICK_MODE: Final[str] = "auto"
 REPLAY_RETENTION_DAYS: Final[int] = 7

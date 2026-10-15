@@ -42,7 +42,7 @@ class BotExecutionResult:
 
 
 class BotSandbox:
-    """Theo dõi giới hạn thời gian nước đi và tổng thời gian một ván."""
+    """Giữ worker bot sống trong ván và tính riêng thời gian thực thi bot."""
 
     def __init__(
         self,
@@ -58,32 +58,58 @@ class BotSandbox:
         self.game_timeout_seconds = game_timeout_seconds
         self.seed = seed
         self._move_index = 0
-        self._started_at = time.perf_counter()
+        self._elapsed_seconds = 0.0
+        self._worker: _LocalBotWorker | None = None
+        self._scan: ScanResult | None = None
 
     @property
     def elapsed_seconds(self) -> float:
-        """Tổng thời gian đã trôi qua kể từ khi bắt đầu ván."""
-        return time.perf_counter() - self._started_at
+        """Tổng thời gian bot đã dùng, không tính khởi động worker."""
+        return self._elapsed_seconds
 
     def run_move(self, board: Board, valid_moves: list[Move], player: int) -> BotExecutionResult:
         """Chạy một nước, giới hạn theo ngân sách còn lại của cả ván."""
-        remaining_game_time = self.game_timeout_seconds - self.elapsed_seconds
+        if self._scan is None:
+            self._scan = scan_bot_source(self.source)
+        if not self._scan.valid:
+            return BotExecutionResult(None, "; ".join(self._scan.errors), 0.0)
+
+        remaining_game_time = self.game_timeout_seconds - self._elapsed_seconds
         if remaining_game_time <= 0:
             return BotExecutionResult(
                 None,
                 "Bot vượt quá tổng thời gian cho phép mỗi ván",
-                self.elapsed_seconds,
+                self._elapsed_seconds,
                 timed_out=True,
             )
-        result = run_bot(
-            self.source,
-            board,
-            valid_moves,
-            player,
-            timeout_seconds=min(self.move_timeout_seconds, remaining_game_time),
-            random_seed=self._next_seed(),
-        )
-        if self.elapsed_seconds >= self.game_timeout_seconds and not result.timed_out:
+
+        timeout = min(self.move_timeout_seconds, remaining_game_time)
+        if config.SANDBOX_URL:
+            result = run_bot(
+                self.source,
+                board,
+                valid_moves,
+                player,
+                timeout_seconds=timeout,
+                random_seed=self._next_seed(),
+            )
+        else:
+            try:
+                if self._worker is None:
+                    self._worker = _LocalBotWorker(self.source)
+                result = self._worker.run_move(
+                    board, valid_moves, player, timeout, self._next_seed()
+                )
+            except _BotStartupError as exc:
+                return BotExecutionResult(
+                    None,
+                    str(exc),
+                    0.0,
+                    timed_out=exc.timed_out,
+                )
+
+        self._elapsed_seconds += result.elapsed_seconds
+        if self._elapsed_seconds >= self.game_timeout_seconds and not result.timed_out:
             return BotExecutionResult(
                 None,
                 "Bot vượt quá tổng thời gian cho phép mỗi ván",
@@ -91,6 +117,12 @@ class BotSandbox:
                 timed_out=True,
             )
         return result
+
+    def close(self) -> None:
+        """Dừng worker sau khi ván kết thúc."""
+        if self._worker is not None:
+            self._worker.close()
+            self._worker = None
 
     def _next_seed(self) -> int:
         """Tạo seed ổn định riêng cho từng nước trong cùng trận."""
@@ -178,7 +210,7 @@ def run_bot(
     timeout_seconds: float = config.BOT_MOVE_TIMEOUT_SECONDS,
     random_seed: int = config.BOT_RANDOM_SEED,
 ) -> BotExecutionResult:
-    """Chạy bot trong tiến trình spawn riêng với giới hạn thời gian cứng."""
+    """Chạy một lượt, không tính khởi động Python vào ngân sách của bot."""
     started_at = time.perf_counter()
     if timeout_seconds <= 0:
         return BotExecutionResult(None, "Thời gian chạy phải lớn hơn 0", 0.0)
@@ -231,103 +263,173 @@ def run_bot(
         except RemoteSandboxError as exc:
             return BotExecutionResult(None, str(exc), time.perf_counter() - started_at)
 
-    context = multiprocessing.get_context("spawn")
-    receiver, sender = context.Pipe(duplex=False)
-    process = context.Process(
-        target=_bot_worker,
-        args=(sender, source, board, valid_moves, player, random_seed),
-        daemon=True,
-    )
-    deadline = started_at + timeout_seconds
+    worker: _LocalBotWorker | None = None
     try:
-        process.start()
-        sender.close()
-        startup_time_remaining = max(0.0, deadline - time.perf_counter())
-        if not receiver.poll(startup_time_remaining):
-            if process.is_alive():
-                process.kill()
-            process.join()
+        worker = _LocalBotWorker(source)
+        return worker.run_move(
+            board,
+            valid_moves,
+            player,
+            timeout_seconds,
+            random_seed,
+        )
+    except _BotStartupError as exc:
+        return BotExecutionResult(
+            None,
+            str(exc),
+            time.perf_counter() - started_at,
+            timed_out=exc.timed_out,
+        )
+    finally:
+        if worker is not None:
+            worker.close()
+
+
+class _BotStartupError(RuntimeError):
+    """A bot worker failed before it became ready to execute moves."""
+
+    def __init__(self, message: str, timed_out: bool = False) -> None:
+        super().__init__(message)
+        self.timed_out = timed_out
+
+
+class _LocalBotWorker:
+    """One isolated Python process reused for all moves by a bot in one game."""
+
+    def __init__(self, source: str) -> None:
+        context = multiprocessing.get_context("spawn")
+        self.connection, worker_connection = context.Pipe(duplex=True)
+        self.process = context.Process(
+            target=_bot_session_worker,
+            args=(worker_connection, source),
+            daemon=True,
+        )
+        self._closed = False
+        try:
+            try:
+                self.process.start()
+            except (OSError, RuntimeError) as exc:
+                raise _BotStartupError(
+                    f"Không khởi động được worker bot: {exc}"
+                ) from exc
+            finally:
+                worker_connection.close()
+            if not self.connection.poll(config.BOT_STARTUP_TIMEOUT_SECONDS):
+                self.close()
+                raise _BotStartupError(
+                    "Bot vượt quá thời gian khởi động cho phép",
+                    timed_out=True,
+                )
+            status, payload = self.connection.recv()
+            if status != "ready":
+                self.close()
+                raise _BotStartupError(str(payload))
+        except (OSError, RuntimeError, EOFError) as exc:
+            self.close()
+            if isinstance(exc, _BotStartupError):
+                raise
+            raise _BotStartupError(f"Không khởi động được worker bot: {exc}") from exc
+
+    def run_move(
+        self,
+        board: Board,
+        valid_moves: list[Move],
+        player: int,
+        timeout_seconds: float,
+        random_seed: int,
+    ) -> BotExecutionResult:
+        """Run one request using a timeout that starts after worker initialization."""
+        started_at = time.perf_counter()
+        if timeout_seconds <= 0:
+            return BotExecutionResult(None, "Thời gian chạy phải lớn hơn 0", 0.0, True)
+        try:
+            self.connection.send(("move", board, valid_moves, player, random_seed))
+            if not self.connection.poll(timeout_seconds):
+                self.close()
+                return BotExecutionResult(
+                    None,
+                    "Bot vượt quá thời gian cho phép",
+                    time.perf_counter() - started_at,
+                    timed_out=True,
+                )
+            status, payload = self.connection.recv()
+        except (EOFError, OSError, RuntimeError) as exc:
+            self.close()
             return BotExecutionResult(
                 None,
-                "Bot vượt quá thời gian cho phép",
-                time.perf_counter() - started_at,
-                timed_out=True,
-            )
-        status, payload = receiver.recv()
-        if status != "started":
-            process.join(timeout=0.1)
-            return BotExecutionResult(
-                None,
-                str(payload),
+                f"Không chạy được bot: {exc}",
                 time.perf_counter() - started_at,
             )
-        execution_started_at = time.perf_counter()
-        execution_time_remaining = max(0.0, deadline - execution_started_at)
-        if not execution_time_remaining or not receiver.poll(execution_time_remaining):
-            if process.is_alive():
-                process.kill()
-            process.join()
-            return BotExecutionResult(
-                None,
-                "Bot vượt quá thời gian cho phép",
-                time.perf_counter() - started_at,
-                timed_out=True,
-            )
-        status, payload = receiver.recv()
-        process.join(timeout=0.1)
-        if process.is_alive():
-            process.kill()
-            process.join()
         elapsed = time.perf_counter() - started_at
         if status != "ok":
             return BotExecutionResult(None, str(payload), elapsed)
         return BotExecutionResult(payload, None, elapsed)
-    except (OSError, RuntimeError, EOFError) as exc:
-        if process.is_alive():
-            process.kill()
-            process.join()
-        return BotExecutionResult(None, f"Không chạy được bot: {exc}", time.perf_counter() - started_at)
-    finally:
-        receiver.close()
-        if sender:
-            sender.close()
+
+    def close(self) -> None:
+        """Stop the isolated child and release both pipe handles."""
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            if self.process.pid is not None:
+                if self.process.is_alive():
+                    try:
+                        self.connection.send(("close",))
+                    except (BrokenPipeError, OSError, RuntimeError):
+                        pass
+                    self.process.join(timeout=0.1)
+                    if self.process.is_alive():
+                        self.process.kill()
+                        self.process.join()
+                self.process.close()
+        finally:
+            self.connection.close()
 
 
-def _bot_worker(
-    sender: Any,
-    source: str,
-    board: Board,
-    valid_moves: list[Move],
-    player: int,
-    random_seed: int,
-) -> None:
-    """Áp giới hạn hệ điều hành rồi tải bot bằng builtins giới hạn."""
+def _bot_session_worker(connection: Any, source: str) -> None:
+    """Load one submission once, then handle moves until its game ends."""
     try:
         _apply_resource_limits()
-        sender.send(("started", None))
-        random.seed(random_seed)
         safe_builtins = _restricted_builtins()
-        namespace: dict[str, Any] = {
-            "__builtins__": safe_builtins,
-            "__name__": "bot_submission",
-        }
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            code = compile(source, "submission.py", "exec", dont_inherit=True, optimize=2)
-            exec(code, namespace, namespace)
-            make_move = namespace.get("make_move")
-            if not callable(make_move):
-                raise ValueError("Không tìm thấy hàm make_move")
-            move = make_move(board, valid_moves, player)
-        if not _is_valid_return(move, valid_moves):
-            raise ValueError("Bot trả về nước đi không thuộc valid_moves")
-        sender.send(("ok", move))
+        code = compile(source, "submission.py", "exec", dont_inherit=True, optimize=2)
+        connection.send(("ready", None))
     except BaseException as exc:
         try:
-            sender.send(("error", f"{type(exc).__name__}: {exc}"[:500]))
+            connection.send(("error", f"{type(exc).__name__}: {exc}"[:500]))
         except (BrokenPipeError, OSError):
             pass
-    finally:
-        sender.close()
+        connection.close()
+        return
+
+    while True:
+        try:
+            request = connection.recv()
+        except (EOFError, OSError):
+            break
+        if request[0] == "close":
+            break
+        _, board, valid_moves, player, random_seed = request
+        try:
+            random.seed(random_seed)
+            namespace: dict[str, Any] = {
+                "__builtins__": safe_builtins,
+                "__name__": "bot_submission",
+            }
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                exec(code, namespace, namespace)
+                make_move = namespace.get("make_move")
+                if not callable(make_move):
+                    raise ValueError("Không tìm thấy hàm make_move")
+                move = make_move(board, valid_moves, player)
+            if not _is_valid_return(move, valid_moves):
+                raise ValueError("Bot trả về nước đi không thuộc valid_moves")
+            connection.send(("ok", move))
+        except BaseException as exc:
+            try:
+                connection.send(("error", f"{type(exc).__name__}: {exc}"[:500]))
+            except (BrokenPipeError, OSError):
+                break
+    connection.close()
 
 
 def _restricted_builtins() -> dict[str, Any]:

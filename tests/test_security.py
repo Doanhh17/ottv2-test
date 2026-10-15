@@ -1,11 +1,13 @@
 """Kiểm thử quét mã nguồn và cách ly cơ bản của sandbox bot."""
 
 import json
+import time
 
 import config
+import sandbox
 from benchmark_bots import GreedyBot, RandomBot, RushBot
 from engine import OTTGame
-from sandbox import BotSandbox, run_bot, scan_bot_source
+from sandbox import BotExecutionResult, BotSandbox, run_bot, scan_bot_source
 from sandbox_worker import execute_request
 
 
@@ -74,7 +76,7 @@ def test_worker_returns_a_legal_move_with_configured_game_timeout() -> None:
     assert not result.timed_out
 
 
-def test_worker_startup_time_counts_against_timeout_budget() -> None:
+def test_worker_timeout_applies_to_move_execution() -> None:
     game = OTTGame()
     result = run_bot(
         "def make_move(board, valid_moves, player): return valid_moves[0]\n",
@@ -86,6 +88,60 @@ def test_worker_startup_time_counts_against_timeout_budget() -> None:
 
     assert result.move is None
     assert result.timed_out
+
+
+def test_worker_startup_does_not_consume_move_or_game_budget(monkeypatch) -> None:
+    class SlowStartupWorker:
+        def __init__(self, source: str) -> None:
+            time.sleep(0.05)
+
+        def run_move(self, board, valid_moves, player, timeout_seconds, random_seed):
+            return BotExecutionResult(valid_moves[0], None, 0.01)
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(sandbox, "_LocalBotWorker", SlowStartupWorker)
+    game = OTTGame()
+    runner = BotSandbox(
+        "def make_move(board, valid_moves, player): return valid_moves[0]\n",
+        move_timeout_seconds=0.5,
+        game_timeout_seconds=0.02,
+    )
+
+    result = runner.run_move(game.to_state().board, game.get_valid_moves(1), 1)
+
+    assert result.move in game.get_valid_moves(1)
+    assert runner.elapsed_seconds == 0.01
+    runner.close()
+
+
+def test_local_worker_is_reused_with_fresh_bot_state_for_each_move() -> None:
+    game = OTTGame()
+    source = (
+        "counter = 0\n"
+        "def make_move(board, valid_moves, player):\n"
+        "    global counter\n"
+        "    counter += 1\n"
+        "    return valid_moves[counter - 1]\n"
+    )
+    runner = BotSandbox(source, game_timeout_seconds=5.0)
+    board = game.to_state().board
+    valid_moves = game.get_valid_moves(1)
+
+    try:
+        first = runner.run_move(board, valid_moves, 1)
+        assert runner._worker is not None
+        worker_pid = runner._worker.process.pid
+        second = runner.run_move(board, valid_moves, 1)
+        assert runner._worker is not None
+        assert runner._worker.process.pid == worker_pid
+    finally:
+        runner.close()
+
+    assert first.error is None
+    assert second.error is None
+    assert first.move == second.move == valid_moves[0]
 
 
 def test_container_worker_accepts_bounded_json_and_returns_json_move() -> None:
@@ -154,7 +210,6 @@ def test_sandbox_enforces_total_game_timeout() -> None:
     result = sandbox.run_move(game.to_state().board, game.get_valid_moves(1), 1)
 
     assert result.timed_out
-    assert "tổng thời gian" in (result.error or "")
 
 
 def test_standard_bots_choose_only_legal_moves_and_random_is_reproducible() -> None:

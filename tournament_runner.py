@@ -184,47 +184,53 @@ def play_game(task: GameTask) -> GameWorkerResult:
 
     forfeiting_player: int | None = None
     error_reason = ""
-    while not game.is_over():
-        player = game.current_player
-        participant = agents[player]
-        valid_moves = game.get_valid_moves(player)
-        move_started = time.perf_counter()
+    try:
+        while not game.is_over():
+            player = game.current_player
+            participant = agents[player]
+            valid_moves = game.get_valid_moves(player)
+            move_started = time.perf_counter()
 
-        if participant.benchmark_kind is not None:
-            bot: BotStrategy | None = random_bots.get(participant.benchmark_kind)
-            if bot is None:
-                move = None
-                error_reason = "Không tồn tại bot chuẩn"
-            else:
-                try:
-                    move = bot.make_move(game.to_state().board, valid_moves, player)
-                except Exception as exc:
+            if participant.benchmark_kind is not None:
+                bot: BotStrategy | None = random_bots.get(participant.benchmark_kind)
+                if bot is None:
                     move = None
-                    error_reason = f"{type(exc).__name__}: {exc}"
-        elif participant.source is not None:
-            result = sandboxes[player].run_move(
-                game.to_state().board, valid_moves, player
+                    error_reason = "Không tồn tại bot chuẩn"
+                else:
+                    try:
+                        move = bot.make_move(game.to_state().board, valid_moves, player)
+                    except Exception as exc:
+                        move = None
+                        error_reason = f"{type(exc).__name__}: {exc}"
+            elif participant.source is not None:
+                result = sandboxes[player].run_move(
+                    game.to_state().board, valid_moves, player
+                )
+                move = result.move
+                error_reason = result.error or ""
+                move_time[player] += result.elapsed_seconds
+            else:
+                move = None
+                error_reason = participant.submission_error or "Không có bài nộp hợp lệ"
+
+            if participant.source is None:
+                move_time[player] += time.perf_counter() - move_started
+            if move is None or move not in valid_moves:
+                forfeiting_player = player
+                if not error_reason:
+                    error_reason = "Bot trả về nước đi không hợp lệ"
+                break
+
+            game.apply_move(move)
+            move_count[player] += 1
+            from_row, from_col = move[0]
+            to_row, to_col = move[1]
+            move_bytes.extend(
+                (from_row * config.BOARD_SIZE + from_col, to_row * config.BOARD_SIZE + to_col)
             )
-            move = result.move
-            error_reason = result.error or ""
-        else:
-            move = None
-            error_reason = participant.submission_error or "Không có bài nộp hợp lệ"
-
-        move_time[player] += time.perf_counter() - move_started
-        if move is None or move not in valid_moves:
-            forfeiting_player = player
-            if not error_reason:
-                error_reason = "Bot trả về nước đi không hợp lệ"
-            break
-
-        game.apply_move(move)
-        move_count[player] += 1
-        from_row, from_col = move[0]
-        to_row, to_col = move[1]
-        move_bytes.extend(
-            (from_row * config.BOARD_SIZE + from_col, to_row * config.BOARD_SIZE + to_col)
-        )
+    finally:
+        for sandbox in sandboxes.values():
+            sandbox.close()
 
     if forfeiting_player is None:
         result = game.result()
@@ -387,34 +393,18 @@ class TournamentRunner:
                     break
                 results.append(_execute_game_task(task))
         else:
-            pool = multiprocessing.Pool(processes=self.workers)
-            iterator = pool.imap_unordered(_execute_game_task, tasks, chunksize=1)
-            try:
-                while True:
-                    remaining = self._deadline_remaining()
-                    if remaining is not None and remaining <= 0:
-                        self.partial = True
-                        pool.terminate()
-                        break
-                    wait_seconds = 0.1 if remaining is None else min(0.1, remaining)
-                    try:
-                        results.append(iterator.next(timeout=wait_seconds))
-                    except multiprocessing.TimeoutError:
-                        continue
-                    except StopIteration:
-                        pool.close()
-                        break
-            except BaseException:
-                pool.terminate()
-                raise
-            finally:
-                pool.join()
+            return self._run_games_parallel(tasks, _execute_game_task)
         self.game_results.extend(results)
         return results
 
-    def _run_games_parallel(self, tasks: Iterable[GameTask]) -> list[GameWorkerResult]:
-        """Bound concurrent remote game jobs and honor the scoring deadline."""
-        if self.game_executor is None:
+    def _run_games_parallel(
+        self,
+        tasks: Iterable[GameTask],
+        executor: GameExecutor | None = None,
+    ) -> list[GameWorkerResult]:
+        """Bound concurrent game jobs and honor the scoring deadline."""
+        game_executor = executor or self.game_executor
+        if game_executor is None:
             raise RuntimeError("Parallel execution requires a game executor")
         results: list[GameWorkerResult] = []
         task_iterator = iter(tasks)
@@ -432,7 +422,7 @@ class TournamentRunner:
                     except StopIteration:
                         exhausted = True
                     else:
-                        pending.add(pool.submit(self.game_executor, task))
+                        pending.add(pool.submit(game_executor, task))
                 if not pending:
                     break
                 remaining = self._deadline_remaining()

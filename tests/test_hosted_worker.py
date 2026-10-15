@@ -96,8 +96,8 @@ def test_worker_http_requires_token_and_starts_restricted_container(monkeypatch)
     monkeypatch.setattr(sandbox_service, "WORKER_TOKEN", "unit-test-token")
     calls = []
 
-    def fake_run(command, request_body):
-        calls.append((command, request_body))
+    def fake_run(command, request_body, timeout_seconds):
+        calls.append((command, request_body, timeout_seconds))
         return 0, b'{"move":[[0,1],[0,0]]}', False
 
     monkeypatch.setattr(sandbox_service, "_run_docker_job", fake_run)
@@ -115,12 +115,23 @@ def test_worker_http_requires_token_and_starts_restricted_container(monkeypatch)
 
         assert response.status_code == 200
         assert response.json()["move"] == [[0, 1], [0, 0]]
-        command, request_body = calls[0]
+        command, request_body, timeout_seconds = calls[0]
         assert command[command.index("--network") + 1] == "none"
         assert "--read-only" in command
         assert "--cap-drop" in command
         assert not any(argument in {"-v", "--volume"} for argument in command)
         assert "--pull=never" in command
         assert b"unit-test-token" not in request_body
+        assert timeout_seconds == 50
     finally:
         client.close()
+
+
+def test_remote_game_container_budget_covers_both_bot_timeouts() -> None:
+    assert sandbox_service._job_timeout_seconds("game") >= (
+        2
+        * (
+            sandbox_service.config.BOT_GAME_TIMEOUT_SECONDS
+            + sandbox_service.config.BOT_STARTUP_TIMEOUT_SECONDS
+        )
+    )

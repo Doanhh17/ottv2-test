@@ -74,6 +74,28 @@ def test_play_game_returns_compact_replay_and_repeatable_id() -> None:
     assert first_result.metadata["p1_id"] == "@GreedyBot"
 
 
+def test_parallel_local_games_can_spawn_isolated_bot_workers() -> None:
+    source = "def make_move(board, valid_moves, player): return valid_moves[0]\n"
+    runner = TournamentRunner("run-threaded", workers=2)
+    tasks = [
+        GameTask(
+            "run-threaded",
+            f"match-{index}",
+            index,
+            GameParticipant(f"p1-{index}", source=source),
+            GameParticipant(f"p2-{index}", source=source),
+            max_plies=2,
+        )
+        for index in range(2)
+    ]
+
+    results = runner._run_games(tasks)
+
+    assert len(results) == 2
+    assert {result.metadata["game_index"] for result in results} == {0, 1}
+    assert all(result.metadata["plies"] <= 2 for result in results)
+
+
 def test_first_swiss_round_pairs_seed_halves() -> None:
     standings = [SwissStanding(f"s{seed}", 0, 0, 0, seed) for seed in range(1, 9)]
 

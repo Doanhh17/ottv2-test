@@ -168,12 +168,29 @@ def choose_replays(
                 chosen.append(candidate)
             if len(chosen) == quota:
                 break
+    stage_best: dict[int, ReplayCandidate] = {}
+    for candidate in sorted(
+        player_games.values(),
+        key=lambda item: (
+            -item.stage_depth(),
+            -item.plies,
+            -item.opponent_strength,
+            item.game_id,
+        ),
+    ):
+        stage_best.setdefault(candidate.stage, candidate)
+    chosen.extend(
+        candidate
+        for candidate in stage_best.values()
+        if candidate not in chosen
+    )
+    chosen = chosen[:quota]
     remaining = sorted(
         (candidate for candidate in player_games.values() if candidate not in chosen),
         key=lambda candidate: (
+            -candidate.plies,
             -candidate.stage_depth(),
             -candidate.opponent_strength,
-            -candidate.plies,
             candidate.game_id,
         ),
     )

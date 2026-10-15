@@ -4,6 +4,7 @@ import pytest
 import zlib
 import struct
 
+import config
 from engine import OTTGame
 from replays import (
     ReplayCandidate,
@@ -38,29 +39,44 @@ def make_candidate(
     )
 
 
-def test_replay_quota_matches_six_and_twenty_game_examples() -> None:
-    assert replay_quota(6) == 2
+def test_replay_quota_shows_up_to_five_games() -> None:
+    assert replay_quota(3) == 3
+    assert replay_quota(6) == 5
     assert replay_quota(20) == 5
     assert replay_quota(0) == 1
 
 
-def test_top32_replays_are_prioritized_and_quota_is_capped_at_five() -> None:
+def test_replays_cover_each_stage_and_prioritize_longer_games() -> None:
     candidates = [make_candidate(f"game-{index:02}", 1, 0) for index in range(15)]
-    candidates.extend(make_candidate(f"playoff-{index:02}", 3, index) for index in range(5))
+    candidates.extend(make_candidate(f"swiss-{index:02}", 2, index) for index in range(5))
+    candidates.extend(
+        make_candidate(
+            f"playoff-{index:02}",
+            3,
+            index,
+            plies=2 if index < 3 else 40,
+        )
+        for index in range(5)
+    )
 
     choices = choose_replays("student-a", candidates)
 
     assert len(choices) == 5
-    assert all(choice.game_id.startswith("playoff-") for choice in choices)
+    chosen = {choice.game_id for choice in choices}
+    assert any(game_id.startswith("game-") for game_id in chosen)
+    assert any(game_id.startswith("swiss-") for game_id in chosen)
+    assert any(game_id.startswith("playoff-") for game_id in chosen)
+    assert "playoff-03" in chosen
+    assert "playoff-00" not in chosen
 
 
-def test_six_games_get_two_access_entries() -> None:
+def test_six_games_get_five_access_entries() -> None:
     candidates = [make_candidate(f"game-{index}", 1, 0) for index in range(6)]
 
     choices = choose_replays("student-a", candidates)
 
-    assert len(choices) == 2
-    assert [choice.order_no for choice in choices] == [1, 2]
+    assert len(choices) == 5
+    assert [choice.order_no for choice in choices] == [1, 2, 3, 4, 5]
 
 
 def test_user_picks_are_kept_first_then_auto_filled_to_quota() -> None:
@@ -70,7 +86,7 @@ def test_user_picks_are_kept_first_then_auto_filled_to_quota() -> None:
         "student-a", candidates, mode="user", selected_game_ids=["game-6"]
     )
 
-    assert len(choices) == 2
+    assert len(choices) == 5
     assert choices[0].game_id == "game-6"
 
 
@@ -79,7 +95,7 @@ def test_daily_access_selects_games_independently_for_both_players() -> None:
 
     choices = choose_daily_replay_access(candidates, ["student-a", "student-b"])
 
-    assert len(choices) == 4
+    assert len(choices) == 10
     assert {choice.student_id for choice in choices} == {"student-a", "student-b"}
 
 
@@ -127,7 +143,11 @@ def test_replay_validator_rejects_odd_length_out_of_range_and_too_many_plies() -
     with pytest.raises(ReplayFormatError):
         validate_moves_bytes(bytes((0, 81)))
     with pytest.raises(ReplayFormatError):
-        validate_moves_bytes(bytes(302))
+        validate_moves_bytes(bytes(config.MAX_PLIES * 2 + 2))
+
+
+def test_replay_validator_accepts_the_configured_maximum_plies() -> None:
+    validate_moves_bytes(bytes(config.MAX_PLIES * 2))
 
 
 def test_frame_builder_rejects_an_illegal_encoded_move() -> None:
