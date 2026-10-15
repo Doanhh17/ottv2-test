@@ -1,0 +1,66 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ottv2
+      POSTGRES_USER: ottv2
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+    networks:
+      - backend
+
+  api:
+    build: .
+    environment:
+      OTTV2_DATABASE_URL: ${OTTV2_DATABASE_URL:?Set OTTV2_DATABASE_URL in .env}
+      OTTV2_SECRET_KEY: ${OTTV2_SECRET_KEY:?Set OTTV2_SECRET_KEY in .env}
+      OTTV2_COOKIE_SECURE: "${OTTV2_COOKIE_SECURE:-0}"
+      OTTV2_TOURNAMENT_START_DATE: ${OTTV2_TOURNAMENT_START_DATE:-2026-10-15}
+    volumes:
+      - submissions:/app/storage/submissions
+      - replays:/app/storage/replays
+      - leaderboards:/app/static/leaderboards
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - backend
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./static:/srv/ottv2/static:ro
+      - leaderboards:/srv/ottv2/static/leaderboards:ro
+    ulimits:
+      nofile:
+        soft: 16384
+        hard: 16384
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - edge
+      - backend
+
+volumes:
+  postgres_data:
+  submissions:
+  replays:
+  leaderboards:
+
+networks:
+  edge:
+  backend:
+    internal: true

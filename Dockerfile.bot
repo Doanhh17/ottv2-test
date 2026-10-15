@@ -1,0 +1,15 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN groupadd --system --gid 10001 bot \
+    && useradd --system --uid 10001 --gid bot --home-dir /app --shell /usr/sbin/nologin bot
+
+COPY --chown=10001:10001 config.py engine.py sandbox.py sandbox_worker.py \
+    benchmark_bots.py tournament_runner.py bot_job.py ./
+
+USER 10001:10001
+ENTRYPOINT ["python", "bot_job.py"]

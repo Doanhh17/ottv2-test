@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f7f5">
+  <meta name="description" content="OTTv2 Bot Programming Arena">
+  <title>OTTv2 | Bot Programming Arena</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Đến nội dung chính</a>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="OTTv2, về đầu trang">
+      <span class="brand-mark" aria-hidden="true"><span>O</span><i></i></span>
+      <span class="brand-name">OTT<span>v2</span></span>
+      <span class="brand-divider" aria-hidden="true"></span>
+      <span class="brand-caption">BOT ARENA</span>
+    </a>
+    <div class="topbar-right">
+      <div class="event-chip" aria-live="polite">
+        <span id="status-light" class="status-light"></span>
+        <span id="status-label">Đang kết nối</span>
+        <span class="chip-divider">/</span>
+        <span id="event-day">Ngày -- · Vòng --</span>
+      </div>
+      <button id="theme-toggle" class="icon-button" type="button" aria-label="Bật giao diện tối" title="Đổi giao diện">◐</button>
+      <button id="login-open" class="button button-dark button-small" type="button">Đăng nhập <span aria-hidden="true">↗</span></button>
+      <button id="logout-button" class="button button-quiet button-small hidden" type="button">Đăng xuất</button>
+    </div>
+  </header>
+
+  <main id="main-content" class="page-shell">
+    <section id="top" class="masthead" aria-labelledby="page-title">
+      <div class="masthead-copy">
+        <p class="eyebrow"><span class="eyebrow-dot"></span> OTTv2 · MÙA GIẢI 2026</p>
+        <h1 id="page-title">Bảng điều hành</h1>
+        <p class="masthead-subtitle">Theo dõi thứ hạng, bài nộp và các ván đấu của mùa giải.</p>
+      </div>
+      <div class="masthead-aside" aria-label="Thông tin mùa giải">
+        <div class="season-meta"><span class="aside-label">TIẾN ĐỘ MÙA GIẢI</span><span class="season-code">MÙA 02 / 2026</span></div>
+        <div class="progress-track" aria-hidden="true"><span id="season-progress"></span></div>
+        <div class="progress-labels"><span id="progress-day">Ngày -- / 35</span><span id="progress-round">Vòng -- / 5</span></div>
+      </div>
+    </section>
+
+    <div class="dashboard-grid">
+      <section class="leaderboard-section" aria-labelledby="leaderboard-title">
+        <div class="section-heading leaderboard-heading">
+          <div>
+            <p class="eyebrow">BẢNG ĐIỂM · MÙA 02</p>
+            <h2 id="leaderboard-title">Bảng xếp hạng</h2>
+          </div>
+          <p id="leaderboard-updated" class="updated-label">Đang tải dữ liệu</p>
+        </div>
+        <div class="leaderboard-toolbar">
+          <div class="tabs" role="tablist" aria-label="Loại bảng xếp hạng">
+            <button class="tab-button active" id="tab-daily" type="button" role="tab" aria-selected="true" data-kind="daily">Hôm qua</button>
+            <button class="tab-button" id="tab-round" type="button" role="tab" aria-selected="false" data-kind="round">Vòng <span id="tab-round-number">--</span></button>
+            <button class="tab-button" id="tab-tournament" type="button" role="tab" aria-selected="false" data-kind="tournament">Toàn giải</button>
+          </div>
+          <label class="search-field">
+            <span class="search-icon" aria-hidden="true">⌕</span>
+            <span class="visually-hidden">Tìm theo mã thí sinh</span>
+            <input id="leaderboard-search" type="search" placeholder="Tìm thí sinh" autocomplete="off">
+            <kbd>/</kbd>
+          </label>
+        </div>
+        <div class="table-scroll">
+          <div class="leaderboard-table" role="table" aria-label="Bảng xếp hạng bot">
+            <div class="table-row table-header" role="row">
+              <span role="columnheader">HẠNG</span>
+              <span role="columnheader">THÍ SINH</span>
+              <span role="columnheader">RANK / TB</span>
+              <span role="columnheader">NGÀY ĐẤU</span>
+              <span role="columnheader">XU HƯỚNG</span>
+            </div>
+            <div id="leaderboard-rows" aria-live="polite" aria-busy="true">
+              <div class="loading-row"><span></span><span></span><span></span></div>
+              <div class="loading-row"><span></span><span></span><span></span></div>
+              <div class="loading-row"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="table-footer">
+          <span id="leaderboard-count">— thí sinh</span>
+          <div class="pagination" aria-label="Phân trang bảng xếp hạng">
+            <button id="page-prev" class="icon-button pagination-button" type="button" aria-label="Trang trước" disabled>←</button>
+            <span id="page-label">Trang 1</span>
+            <button id="page-next" class="icon-button pagination-button" type="button" aria-label="Trang sau" disabled>→</button>
+          </div>
+        </div>
+        <p id="leaderboard-error" class="inline-error hidden" role="alert"></p>
+      </section>
+
+      <aside class="side-column" aria-label="Khu vực thí sinh">
+        <section class="submission-panel" aria-labelledby="submission-title">
+          <div class="panel-topline">
+            <p class="eyebrow">KHU VỰC THÍ SINH</p>
+            <span id="submission-status" class="small-status">CẦN ĐĂNG NHẬP</span>
+          </div>
+          <h2 id="submission-title">Nộp bot</h2>
+          <p class="panel-description">Bản Python mới nhất sẽ được lưu vào hồ sơ của bạn.</p>
+          <form id="upload-form">
+            <label id="drop-zone" class="drop-zone" for="bot-file">
+              <input id="bot-file" name="file" type="file" accept=".py,text/x-python" hidden>
+              <span class="upload-icon" aria-hidden="true">↑</span>
+              <span class="drop-title">Thả tệp .py vào đây</span>
+              <span class="drop-caption">hoặc <u>chọn từ thiết bị</u> · tối đa 100 KB</span>
+              <span id="selected-file" class="selected-file hidden"></span>
+            </label>
+            <button id="submit-button" class="button button-green submit-button" type="submit" disabled>
+              <span>Nộp bài</span><span aria-hidden="true">↗</span>
+            </button>
+          </form>
+          <div id="submit-feedback" class="feedback hidden" role="status" aria-live="polite"></div>
+          <div id="submission-meta" class="submission-meta hidden"></div>
+          <div class="resource-line"><span>CPU / lượt</span><strong>0,2 giây</strong><span class="resource-separator">·</span><span>Bộ nhớ</span><strong>256 MB</strong></div>
+        </section>
+
+        <section class="personal-panel" aria-labelledby="personal-title">
+          <div class="section-heading compact-heading">
+            <div><p class="eyebrow">HỒ SƠ CỦA BẠN</p><h2 id="personal-title">Đường đua</h2></div>
+            <span id="personal-rank" class="personal-rank">—</span>
+          </div>
+          <div id="rank-chart" class="rank-chart" role="img" aria-label="Biểu đồ thứ hạng cá nhân"></div>
+          <div class="personal-footer"><span id="personal-days">Đăng nhập để xem kết quả</span><span class="chart-key"><i></i> Rank ngày</span></div>
+          <div class="recent-games">
+            <div class="recent-heading"><span>VÁN GẦN ĐÂY</span><button id="reload-personal" class="text-button" type="button" aria-label="Tải lại kết quả">↻</button></div>
+            <div id="recent-games-list" class="recent-list"><p class="muted-text">Đăng nhập để xem ván đấu.</p></div>
+          </div>
+        </section>
+
+        <section id="admin-tools" class="admin-panel hidden" aria-labelledby="admin-title">
+          <div class="admin-panel-heading">
+            <div><p class="eyebrow">QUẢN TRỊ</p><h2 id="admin-title">Điều hành cuộc thi</h2></div>
+            <span id="admin-run-status" class="admin-run-status">CHƯA CÓ LƯỢT CHẤM</span>
+          </div>
+          <p id="admin-day-label" class="admin-day-label">Ngày -- · Vòng --</p>
+          <button id="admin-lock-toggle" class="button button-admin-lock" type="button">Khóa nhận bài</button>
+          <div class="admin-actions">
+            <button id="admin-score" class="button button-dark" type="button" disabled>Chấm điểm</button>
+            <button id="admin-publish" class="button button-quiet" type="button" disabled>Công bố BXH</button>
+          </div>
+          <p id="admin-feedback" class="admin-feedback" aria-live="polite">Khóa nhận bài trước khi bắt đầu chấm.</p>
+        </section>
+      </aside>
+    </div>
+
+    <section class="replay-section" aria-labelledby="replay-title">
+      <div class="section-heading replay-heading">
+        <div><p class="eyebrow">PHÒNG PHÂN TÍCH</p><h2 id="replay-title">Ván đấu của tôi</h2></div>
+        <div class="replay-quota"><strong id="replay-quota">0 / 0</strong><span>ván được mở</span></div>
+      </div>
+      <div class="replay-workspace">
+        <div class="replay-list-column">
+          <div class="replay-list-heading"><span>REPLAY ĐƯỢC CẤP</span><span id="replay-day-label">Hôm nay</span></div>
+          <div id="replay-list" class="replay-list"><p class="muted-text">Đăng nhập để xem replay.</p></div>
+          <p class="quota-note">Replay được chọn theo giai đoạn thi đấu sâu nhất.</p>
+        </div>
+        <div class="replay-stage">
+          <div class="replay-stage-top">
+            <div><span id="replay-stage-label" class="stage-label">CHỌN MỘT VÁN</span><h3 id="replay-match-title">Bàn đấu OTTv2</h3></div>
+            <span id="replay-result" class="result-pill">9 × 9</span>
+          </div>
+          <div class="board-wrap">
+            <div id="board-columns" class="board-labels board-columns" aria-hidden="true"></div>
+            <div class="board-with-rows">
+              <div id="board-rows" class="board-labels board-rows" aria-hidden="true"></div>
+              <div id="replay-board" class="game-board" role="grid" aria-label="Bàn cờ Oẳn Tù Tì 9 nhân 9"></div>
+            </div>
+          </div>
+          <div class="board-legend"><span><i class="camp-dot camp-one"></i>Phe 1 · a1</span><span><i class="camp-dot camp-two"></i>Phe 2 · i9</span><span id="captured-label">Quân bị ăn: —</span></div>
+          <div class="replay-controls">
+            <button id="step-back" class="icon-button control-button" type="button" aria-label="Lùi một nước" disabled>←</button>
+            <button id="play-toggle" class="play-button" type="button" aria-label="Phát replay" disabled>▶</button>
+            <button id="step-forward" class="icon-button control-button" type="button" aria-label="Tiến một nước" disabled>→</button>
+            <label class="visually-hidden" for="replay-slider">Chọn nước đi</label>
+            <input id="replay-slider" class="replay-slider" type="range" min="0" max="0" value="0" disabled>
+            <span id="ply-label" class="ply-label">0 / 0</span>
+            <label class="visually-hidden" for="play-speed">Tốc độ phát</label>
+            <select id="play-speed" class="speed-select" aria-label="Tốc độ replay"><option value="2000">0,5×</option><option value="1000" selected>1×</option><option value="500">2×</option></select>
+          </div>
+          <p id="win-reason" class="win-reason">← → để chuyển nước · Space để phát / tạm dừng</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="guide-section" aria-labelledby="guide-title">
+      <div class="guide-heading">
+        <div><p class="eyebrow">HƯỚNG DẪN THÍ SINH</p><h2 id="guide-title">Viết bot đầu tiên</h2><p class="guide-intro">Bot nhận trạng thái bàn cờ và danh sách nước hợp lệ, sau đó trả về một nước trong danh sách đó.</p></div>
+        <span class="guide-index">TÀI LIỆU KỸ THUẬT</span>
+      </div>
+      <div class="guide-grid">
+        <article class="guide-block guide-contract">
+          <span class="guide-number">01</span><h3>Đầu vào của hàm</h3>
+          <dl class="api-fields">
+            <div><dt><code>board</code></dt><dd>Tuple 9×9. Ô trống là <code>None</code>; quân có dạng <code>"1R"</code>, <code>"2P"</code>.</dd></div>
+            <div><dt><code>valid_moves</code></dt><dd>Danh sách <code>((hàng_đi, cột_đi), (hàng_đến, cột_đến))</code>.</dd></div>
+            <div><dt><code>player</code></dt><dd>Số nguyên <code>1</code> hoặc <code>2</code>.</dd></div>
+          </dl>
+          <div class="piece-key"><span><b class="piece-symbol rock">R</b>Búa</span><span><b class="piece-symbol scissors">S</b>Kéo</span><span><b class="piece-symbol paper">P</b>Lá</span></div>
+          <div class="corner-diagram" aria-label="Phe 1 ở góc a1, phe 2 ở góc i9"><span class="home-one">P1 · a1</span><span class="diagram-line"></span><span class="home-two">P2 · i9</span></div>
+        </article>
+        <article class="guide-block guide-example">
+          <div class="guide-example-heading"><div><span class="guide-number">02</span><h3>Bot mẫu: ăn quân, tiến về căn cứ</h3></div><button id="copy-bot-sample" class="copy-button" type="button" aria-label="Sao chép mã bot mẫu">Sao chép mã</button></div>
+          <p>Mẫu này ưu tiên ăn quân có thể ăn; nếu không, chọn nước giúp tiến gần góc nhà đối phương.</p>
+          <pre id="bot-sample"><code>def make_move(board, valid_moves, player):
+    """Chọn nước ăn quân hoặc tiến về căn cứ đối phương."""
+    goal = (8, 8) if player == 1 else (0, 0)
+    best_move = valid_moves[0]
+    best_score = float("-inf")
+
+    for move in valid_moves:
+        (_, _), (to_row, to_col) = move
+        target_piece = board[to_row][to_col]
+        distance = max(abs(goal[0] - to_row), abs(goal[1] - to_col))
+        score = 100 if target_piece is not None else 0
+        score -= distance
+
+        if (to_row, to_col) == goal:
+            score += 1000
+        if score > best_score:
+            best_score = score
+            best_move = move
+
+    return best_move</code></pre>
+          <p class="code-note">Không cần tự kiểm tra luật: <code>valid_moves</code> chỉ chứa các nước hợp lệ.</p>
+        </article>
+        <article class="guide-block guide-checklist">
+          <span class="guide-number">03</span><h3>Kiểm tra trước khi nộp</h3>
+          <ol class="submit-checklist">
+            <li>Lưu mã thành tệp UTF-8 có đuôi <code>.py</code>.</li>
+            <li>Định nghĩa đúng <code>make_move(board, valid_moves, player)</code>.</li>
+            <li>Luôn trả về một phần tử thuộc <code>valid_moves</code>.</li>
+            <li>Chạy thử với bàn cờ mở đầu và tình huống không có mục tiêu ăn.</li>
+          </ol>
+          <div class="limits-note"><strong>Giới hạn</strong><span>0,2 giây/nước · 10 giây/ván · RAM 256 MB · tệp 100 KB</span></div>
+          <p class="security-note">Không dùng mạng, truy cập tệp, hoặc import ngoài whitelist.</p>
+        </article>
+      </div>
+    </section>
+    <footer class="page-footer"><span>OTTv2 <b>BOT ARENA</b></span><span>Giải đấu bot · Việt Nam</span><a href="#top">Lên đầu trang ↑</a></footer>
+  </main>
+
+  <dialog id="login-dialog" class="login-dialog" aria-labelledby="login-title">
+    <form id="login-form" class="login-form">
+      <button id="login-close" class="dialog-close icon-button" type="button" aria-label="Đóng">×</button>
+      <p class="eyebrow">OTTv2 · THÍ SINH</p>
+      <h2 id="login-title">Trở lại bàn đấu.</h2>
+      <label for="student-id">Mã thí sinh</label>
+      <input id="student-id" name="student_id" autocomplete="username" required minlength="3" maxlength="32">
+      <label for="password">Mật khẩu</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <p id="login-error" class="inline-error hidden" role="alert"></p>
+      <button class="button button-dark dialog-submit" type="submit">Đăng nhập <span aria-hidden="true">↗</span></button>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
