@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from admin_workflows import AdminWorkflows
 from db import create_database_engine, initialize_database
-from models import DailyRank, Game, TournamentRun, User
+from models import DailyRank, Game, ReplayAccess, TournamentRun, User
+from replays import replay_quota
 
 
 def test_scoring_run_persists_unique_ranks_replays_and_publish_files(
@@ -64,5 +65,27 @@ def test_scoring_run_persists_unique_ranks_replays_and_publish_files(
     } <= {path.name for path in (tmp_path / "static" / "leaderboards").iterdir()}
     with Session(database_engine) as session:
         assert session.get(TournamentRun, run_id).status == "PUBLISHED"
+        games = session.scalars(select(Game).where(Game.run_id == run_id)).all()
+        accesses = session.scalars(
+            select(ReplayAccess).where(ReplayAccess.run_id == run_id)
+        ).all()
+        games_by_id = {game.game_id: game for game in games}
+        assert accesses
+        for access in accesses:
+            game = games_by_id[access.game_id]
+            assert access.student_id in (game.p1_id, game.p2_id)
+
+        for student_id in {game.p1_id for game in games} | {
+            game.p2_id for game in games
+        }:
+            played_games = [
+                game
+                for game in games
+                if student_id in (game.p1_id, game.p2_id)
+            ]
+            selected_games = [
+                access for access in accesses if access.student_id == student_id
+            ]
+            assert len(selected_games) == replay_quota(len(played_games))
 
     database_engine.dispose()

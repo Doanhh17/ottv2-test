@@ -19,9 +19,17 @@ from leaderboard import (
     export_leaderboards,
     leaderboard_payload,
 )
-from models import DailyRank, Game, Submission, SystemSetting, TournamentRun, User
+from models import (
+    DailyRank,
+    Game,
+    ReplayAccess,
+    Submission,
+    SystemSetting,
+    TournamentRun,
+    User,
+)
 from object_storage import ObjectStorage
-from replays import ReplayStore
+from replays import ReplayCandidate, ReplayStore, choose_daily_replay_access
 from remote_sandbox import execute_game
 from tournament_runner import BotEntrant, TournamentRunner
 
@@ -132,6 +140,13 @@ class AdminWorkflows:
                 for rank in ranks
             ]
             student_ids = [user.student_id for user in users]
+            daily_rank_by_student = {
+                rank.student_id: rank.rank for rank in ranks if rank.day_no == day_no
+            }
+            strength_by_student = {
+                student_id: float(len(student_ids) + 1 - rank)
+                for student_id, rank in daily_rank_by_student.items()
+            }
             round_start = (run.round_no - 1) * config.ROUND_DAYS + 1
             round_days = list(range(round_start, day_no + 1))
             season_days = list(range(1, day_no + 1))
@@ -180,6 +195,49 @@ class AdminWorkflows:
                     self.leaderboard_directory,
                     "application/json",
                 )
+            games = session.scalars(
+                select(Game)
+                .where(Game.run_id == run.run_id)
+                .order_by(Game.game_id)
+            ).all()
+            replay_candidates = [
+                ReplayCandidate(
+                    game_id=game.game_id,
+                    p1_id=game.p1_id,
+                    p2_id=game.p2_id,
+                    stage=game.stage,
+                    round_in_stage=game.round_in_stage,
+                    opponent_strength=(
+                        strength_by_student.get(game.p1_id, 0.0)
+                        + strength_by_student.get(game.p2_id, 0.0)
+                    )
+                    / 2,
+                    plies=game.plies,
+                    result=game.result,
+                    win_reason=game.win_reason,
+                )
+                for game in games
+            ]
+            replay_choices = choose_daily_replay_access(
+                replay_candidates, student_ids
+            )
+            existing_access = set(
+                session.execute(
+                    select(ReplayAccess.student_id, ReplayAccess.game_id).where(
+                        ReplayAccess.run_id == run.run_id
+                    )
+                ).all()
+            )
+            for choice in replay_choices:
+                if (choice.student_id, choice.game_id) not in existing_access:
+                    session.add(
+                        ReplayAccess(
+                            student_id=choice.student_id,
+                            game_id=choice.game_id,
+                            run_id=run.run_id,
+                            order_no=choice.order_no,
+                        )
+                    )
             run.status = "PUBLISHED"
             session.merge(
                 SystemSetting(
