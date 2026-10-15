@@ -561,6 +561,14 @@ kbd { padding: 1px 4px; border: 1px solid var(--line); border-radius: 3px; color
 .admin-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
 .admin-actions .button { min-height: 36px; padding: 0 8px; font-size: 10px; }
 .admin-feedback { min-height: 18px; margin: 10px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.admin-invite { margin-top: 17px; padding-top: 14px; border-top: 1px solid var(--line); }
+.admin-invite h3 { margin: 0; font-size: 13px; }
+.admin-invite form { display: grid; gap: 7px; margin-top: 10px; }
+.admin-invite label { color: var(--muted); font-size: 10px; }
+.admin-invite input { min-height: 36px; padding: 7px 9px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); color: var(--ink); font: inherit; }
+.admin-invite .button { min-height: 36px; justify-content: center; }
+.admin-invite-note { margin: 8px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.admin-invite .is-error { color: var(--coral); }
 .countdown-block { display: none; }
 
 .admin-panel {

@@ -5,6 +5,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from argon2 import PasswordHasher
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import config
@@ -37,3 +38,13 @@ def create_user(
     session.add(user)
     session.commit()
     return user
+
+
+def bootstrap_admin(session: Session, student_id: str, password: str) -> bool:
+    """Create the configured bootstrap administrator only when its ID is unused."""
+    if session.scalar(select(User.student_id).where(User.student_id == student_id)) is not None:
+        return False
+    if len(password) < 12:
+        raise ValueError("Bootstrap administrator password must be at least 12 characters")
+    create_user(session, student_id, password, is_admin=True)
+    return True

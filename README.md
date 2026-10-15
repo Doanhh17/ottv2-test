@@ -4,12 +4,12 @@
 
 - SQLite dùng khi chạy trực tiếp; Docker Compose dùng PostgreSQL. Ngày bắt đầu giải mặc định là `2026-10-15`, có thể đặt bằng `OTTV2_TOURNAMENT_START_DATE`.
 - Múi giờ ngày giải là `Asia/Ho_Chi_Minh`; việc khóa/mở nhận bài và công bố do admin chủ động điều khiển, không tự khóa theo giờ.
-- Tài khoản được tạo qua công cụ vận hành, không có API đăng ký công khai. Cần đặt `OTTV2_SECRET_KEY` ổn định trước khi chạy nhiều lần.
+- Không có API đăng ký công khai. Render demo tạo admin ban đầu từ `OTTV2_BOOTSTRAP_ADMIN_ID` và `OTTV2_BOOTSTRAP_ADMIN_PASSWORD`; admin có thể tạo participant qua giao diện. Cần đặt `OTTV2_SECRET_KEY` ổn định trước khi chạy nhiều lần.
 - Khi triển khai có nhận bot từ người khác, đặt `OTTV2_REQUIRE_REMOTE_SANDBOX=1` và cấu hình worker Docker riêng; không chạy bot không tin cậy trực tiếp trong API.
 - Admin có thể khóa nhận bài, bắt đầu chấm nền, theo dõi checkpoint và công bố leaderboard. Chấm chỉ bắt đầu khi đã khóa bài; leaderboard chỉ được ghi ra vùng public khi admin công bố.
 - Scheduler APScheduler hiện cung cấp lịch callback/cleanup tùy chọn; quy trình admin thủ công là đường vận hành mặc định, không có khóa giờ 01:00/05:00/06:00.
 - Rate limit login/nộp bài hiện là sliding-window trong bộ nhớ một process. Nếu chạy nhiều replica, cần chuyển bộ đếm sang Redis hoặc kho dùng chung.
-- Quét AST và restricted builtins không phải ranh giới bảo mật tuyệt đối. Dùng container worker cô lập như phần Sandbox bên dưới; không chạy bot không tin cậy trên máy có dữ liệu bí mật.
+- Quét AST và restricted builtins không phải ranh giới bảo mật tuyệt đối. Render demo chạy bot đã tải lên trong cùng web service, không có container isolation; chỉ mời người bạn tin tưởng. Với bot không tin cậy, dùng worker Docker cô lập như phần Sandbox bên dưới.
 
 ## Chạy cục bộ
 
@@ -53,63 +53,16 @@ Mở `http://localhost:8080`. Nginx phục vụ `/static/` và JSON dưới `/ap
 
 ## Host thử nghiệm miễn phí trên Render
 
-Repo có [render.yaml](./render.yaml) để tạo Web Service gói Free. Trước khi mở dịch vụ, cần có PostgreSQL bên ngoài, bucket S3-compatible cho file và worker Docker riêng. Ví dụ có thể dùng PostgreSQL managed và Cloudflare R2 free tier; hãy kiểm tra giới hạn, chính sách ngừng dịch vụ/xóa dữ liệu và sao lưu của nhà cung cấp trước khi dùng. Không dùng filesystem của Render Web Service để giữ database, bot, replay hoặc leaderboard.
-
-### 1. Chuẩn bị lưu trữ
-
-- Tạo PostgreSQL managed bên ngoài Render, lấy connection URL. Đặt dialect SQLAlchemy thành `postgresql+psycopg://` (Render PostgreSQL Free có thể hết hạn sau 30 ngày).
-- Tạo bucket riêng tư trong dịch vụ S3-compatible và access key chỉ có quyền đọc/ghi bucket đó. Cần các giá trị `OTTV2_S3_ENDPOINT`, `OTTV2_S3_BUCKET`, `OTTV2_S3_ACCESS_KEY_ID`, `OTTV2_S3_SECRET_ACCESS_KEY`; `OTTV2_S3_REGION` mặc định là `auto`.
-- URL database, S3 keys và worker token là secrets. Không commit chúng vào Git hoặc gửi chúng qua chat.
-
-### 2. Chuẩn bị máy Windows làm worker cô lập
-
-Máy này phải bật, có Internet và Docker Desktop đang chạy trong lúc người dùng nộp bot hoặc admin chấm giải. Mỗi lượt chạy được giao cho container riêng, không mạng, filesystem chỉ đọc, không capabilities, giới hạn 256 MiB RAM và một CPU.
-
-Trong PowerShell tại thư mục dự án:
-
-```powershell
-docker build -f Dockerfile.bot -t ottv2-bot-worker:latest .
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-```
-
-Giữ bí mật token vừa tạo. Đặt cùng giá trị vào biến môi trường của worker và Render. Chạy API worker ở terminal riêng:
-
-```powershell
-$env:OTTV2_SANDBOX_TOKEN = "đặt-token-đã-tạo-ở-trên"
-python -m uvicorn sandbox_service:app --host 127.0.0.1 --port 9000
-```
-
-Cài `cloudflared`, rồi trong terminal khác tạo HTTPS tunnel:
-
-```powershell
-cloudflared tunnel --url http://127.0.0.1:9000
-```
-
-Lệnh sẽ in URL HTTPS công khai. Với Quick Tunnel, URL có thể đổi khi tạo tunnel lại; khi đổi, cập nhật `OTTV2_SANDBOX_URL` trên Render. Worker chỉ chấp nhận request có bearer token. Không mở port worker trực tiếp trên router/firewall; dùng HTTPS tunnel.
-
-### 3. Deploy Web Service
+[render.yaml](./render.yaml) mô tả đúng một Web Service gói Free, chạy SQLite và lưu tệp trực tiếp trên filesystem của service. Không cần PostgreSQL/S3 bên ngoài, worker từ xa hoặc tunnel. Đây chỉ là cấu hình demo: filesystem Render là ephemeral, vì vậy SQLite, tài khoản, bài bot, replay và leaderboard có thể mất khi service được thay thế hoặc khởi động lại. Không dùng cho dữ liệu quan trọng hoặc giải cần lưu trữ lâu dài.
 
 1. Đẩy repository lên GitHub, sau đó trong Render chọn **New > Blueprint** và kết nối repository.
-2. Render đọc `render.yaml`. Trong Environment của service, điền các giá trị `OTTV2_DATABASE_URL`, `OTTV2_SANDBOX_URL`, `OTTV2_SANDBOX_TOKEN` và bốn biến `OTTV2_S3_*` bắt buộc.
-3. Chờ deploy và kiểm tra `/healthz`. Free Web Service có thể ngủ sau thời gian không có truy cập; lần mở lại thường chậm. Dữ liệu chính vẫn nằm ở PostgreSQL/S3 bên ngoài.
+2. Trước khi tạo service, nhập `OTTV2_BOOTSTRAP_ADMIN_ID` (3–32 ký tự chữ/số/gạch dưới/gạch ngang) và `OTTV2_BOOTSTRAP_ADMIN_PASSWORD` (ít nhất 12 ký tự) trong các biến môi trường được yêu cầu. Dùng mật khẩu dài, ngẫu nhiên và riêng cho demo.
+3. Render tự sinh `OTTV2_SECRET_KEY`. Blueprint đặt `OTTV2_DEMO_MODE=1`, SQLite cục bộ và không bật remote sandbox. Chờ deploy rồi kiểm tra `/healthz`.
+4. Đăng nhập bằng tài khoản bootstrap. Trong **Mời thí sinh**, nhập mã tài khoản; mật khẩu ngẫu nhiên chỉ hiển thị một lần. Gửi thông tin đăng nhập riêng cho người được mời. Admin hiện có không bị thay đổi mật khẩu khi service khởi động lại.
 
-`OTTV2_REQUIRE_REMOTE_SANDBOX=1` khiến app không khởi động nếu thiếu worker HTTPS và token; không tự rơi về chạy bot trong tiến trình API. Worker offline sẽ làm upload/chấm báo lỗi cho tới khi máy Windows và tunnel hoạt động trở lại.
+Không có self-registration và chỉ admin được mời tài khoản participant. **Cảnh báo an toàn:** bot của người tham gia chạy trong subprocess của cùng một web service; chúng không được chạy trong container riêng biệt. AST scan/restricted builtins không phải biên bảo mật đáng tin cậy. Chỉ mời người tin tưởng và không đưa dữ liệu bí mật vào demo. Với bot không tin cậy, dùng cấu hình production và worker container cô lập; các biến deploy mặc định bên ngoài Blueprint demo vẫn giữ nguyên chế độ remote opt-in như trước.
 
-### 4. Cấp tài khoản mời
-
-Không có đăng ký công khai. Tạo admin đầu tiên và từng thí sinh bằng lệnh vận hành sau khi đặt `OTTV2_DATABASE_URL` vào môi trường PowerShell:
-
-```powershell
-python create_account.py --student-id admin_doanh --admin
-python create_account.py --student-id bot_01
-```
-
-Script hỏi mật khẩu hai lần, không nhận mật khẩu qua tham số dòng lệnh. Chỉ cấp `--admin` cho người tin cậy. Gửi mã tài khoản và mật khẩu cho người được mời qua kênh riêng.
-
-Free hosting phù hợp để thử, không có cam kết uptime hoặc backup. Render Free vẫn có thể ngủ; nhà cung cấp PostgreSQL/S3 bên ngoài cũng có giới hạn riêng. Sao lưu dữ liệu định kỳ và không dùng cho giải có dữ liệu quan trọng nếu chưa diễn tập khôi phục.
+Render Free có thể ngủ và không cung cấp tính bền vững cho dữ liệu filesystem trong cấu hình này. Đây là demo tiện lợi, không phải production deployment.
 
 ## Sandbox worker
 

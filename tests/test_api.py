@@ -74,6 +74,22 @@ def test_hosted_mode_rejects_ephemeral_sqlite_database(monkeypatch) -> None:
         database_engine.dispose()
 
 
+def test_demo_mode_rejects_remote_sandbox_and_object_storage(monkeypatch) -> None:
+    monkeypatch.setattr(config, "DEMO_MODE", True)
+    monkeypatch.setattr(config, "DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setattr(config, "REQUIRE_REMOTE_SANDBOX", False)
+    monkeypatch.setattr(config, "SANDBOX_URL", "")
+    monkeypatch.setattr(config, "SANDBOX_TOKEN", "")
+    monkeypatch.setenv("OTTV2_S3_ENDPOINT", "https://storage.example.invalid")
+    with pytest.raises(RuntimeError, match="external object storage"):
+        create_app(database_engine=create_database_engine("sqlite:///:memory:"))
+
+    monkeypatch.delenv("OTTV2_S3_ENDPOINT")
+    monkeypatch.setattr(config, "SANDBOX_URL", "https://worker.example.invalid")
+    with pytest.raises(RuntimeError, match="remote sandbox"):
+        create_app(database_engine=create_database_engine("sqlite:///:memory:"))
+
+
 def test_spa_and_static_assets_are_served(tmp_path: Path) -> None:
     client, database_engine, _, _, _ = make_client(tmp_path)
     try:
@@ -83,6 +99,7 @@ def test_spa_and_static_assets_are_served(tmp_path: Path) -> None:
 
         assert page.status_code == 200
         assert 'lang="vi"' in page.text
+        assert 'id="admin-invite-form"' in page.text
         assert stylesheet.status_code == 200
         assert "--jade" in stylesheet.text
         assert script.status_code == 200
@@ -103,6 +120,99 @@ def test_login_sets_http_only_session_and_logout_requires_csrf(tmp_path: Path) -
         assert rejected.status_code == 403
         assert accepted.status_code == 200
         assert accepted.json() == {"ok": True}
+    finally:
+        client.close()
+        database_engine.dispose()
+
+
+def test_demo_bootstrap_admin_is_created_once_and_never_resets_password(
+    monkeypatch, tmp_path: Path
+) -> None:
+    database_path = tmp_path / "bootstrap.sqlite"
+    database_engine = create_database_engine(f"sqlite:///{database_path.as_posix()}")
+    monkeypatch.setattr(config, "DEMO_MODE", True)
+    monkeypatch.setattr(config, "DATABASE_URL", f"sqlite:///{database_path.as_posix()}")
+    monkeypatch.setenv(config.BOOTSTRAP_ADMIN_ID_ENV, "demo_admin")
+    monkeypatch.setenv(config.BOOTSTRAP_ADMIN_PASSWORD_ENV, "first-bootstrap-password")
+    application = create_app(
+        database_engine=database_engine,
+        submission_directory=tmp_path / "submissions",
+        replay_directory=tmp_path / "replays",
+        leaderboard_directory=tmp_path / "leaderboards",
+        secret_key="unit-test-secret-key-with-enough-entropy",
+    )
+    try:
+        with TestClient(application):
+            pass
+        with Session(database_engine) as session:
+            original = session.get(app_module.User, "demo_admin")
+            assert original is not None
+            assert original.is_admin
+            original_hash = original.password_hash
+
+        monkeypatch.setenv(config.BOOTSTRAP_ADMIN_PASSWORD_ENV, "short")
+        with TestClient(application):
+            pass
+        with Session(database_engine) as session:
+            existing = session.get(app_module.User, "demo_admin")
+            assert existing is not None
+            assert existing.is_admin
+            assert existing.password_hash == original_hash
+            assert app_module.password_hasher.verify(
+                existing.password_hash, "first-bootstrap-password"
+            )
+    finally:
+        database_engine.dispose()
+
+
+def test_admin_can_invite_participant_but_non_admin_cannot(tmp_path: Path) -> None:
+    client, database_engine, _, _, _ = make_client(tmp_path)
+    try:
+        alpha_csrf = login(client, "alpha")
+        denied = client.post(
+            "/admin/accounts",
+            json={"student_id": "new_bot"},
+            headers={"X-CSRF-Token": alpha_csrf},
+        )
+        assert denied.status_code == 403
+        assert denied.json()["error"]["code"] == "ADMIN_REQUIRED"
+
+        admin_csrf = login(client, "charlie")
+        missing_csrf = client.post(
+            "/admin/accounts", json={"student_id": "new_bot"}
+        )
+        assert missing_csrf.status_code == 403
+
+        invited = client.post(
+            "/admin/accounts",
+            json={"student_id": "new_bot"},
+            headers={"X-CSRF-Token": admin_csrf},
+        )
+        assert invited.status_code == 200
+        credentials = invited.json()
+        assert credentials["student_id"] == "new_bot"
+        assert len(credentials["initial_password"]) >= 24
+        assert client.post(
+            "/api/auth/login",
+            json={
+                "student_id": credentials["student_id"],
+                "password": credentials["initial_password"],
+            },
+        ).status_code == 200
+
+        admin_csrf = login(client, "charlie")
+        duplicate = client.post(
+            "/admin/accounts",
+            json={"student_id": "new_bot"},
+            headers={"X-CSRF-Token": admin_csrf},
+        )
+        assert duplicate.status_code == 409
+        invalid = client.post(
+            "/admin/accounts",
+            json={"student_id": "not valid"},
+            headers={"X-CSRF-Token": admin_csrf},
+        )
+        assert invalid.status_code == 422
     finally:
         client.close()
         database_engine.dispose()

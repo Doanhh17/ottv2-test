@@ -147,6 +147,18 @@
             <button id="admin-publish" class="button button-quiet" type="button" disabled>Công bố BXH</button>
           </div>
           <p id="admin-feedback" class="admin-feedback" aria-live="polite">Khóa nhận bài trước khi bắt đầu chấm.</p>
+          <div class="admin-invite">
+            <div class="admin-panel-heading">
+              <div><p class="eyebrow">TÀI KHOẢN</p><h3>Mời thí sinh</h3></div>
+            </div>
+            <form id="admin-invite-form">
+              <label for="invite-student-id">Mã thí sinh</label>
+              <input id="invite-student-id" name="student_id" autocomplete="off" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_-]{3,32}">
+              <button id="admin-invite-button" class="button button-dark" type="submit">Tạo tài khoản</button>
+            </form>
+            <p class="admin-invite-note">Mật khẩu khởi tạo chỉ hiện một lần. Gửi riêng cho người được mời.</p>
+            <p id="admin-invite-feedback" class="admin-feedback" aria-live="polite"></p>
+          </div>
         </section>
       </aside>
     </div>

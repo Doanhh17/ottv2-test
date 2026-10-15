@@ -100,6 +100,9 @@ SANDBOX_TOKEN: Final[str] = os.environ.get("OTTV2_SANDBOX_TOKEN", "")
 REQUIRE_REMOTE_SANDBOX: Final[bool] = (
     os.environ.get("OTTV2_REQUIRE_REMOTE_SANDBOX", "0") == "1"
 )
+DEMO_MODE: Final[bool] = os.environ.get("OTTV2_DEMO_MODE", "0") == "1"
+BOOTSTRAP_ADMIN_ID_ENV: Final[str] = "OTTV2_BOOTSTRAP_ADMIN_ID"
+BOOTSTRAP_ADMIN_PASSWORD_ENV: Final[str] = "OTTV2_BOOTSTRAP_ADMIN_PASSWORD"
 TIMEZONE_NAME: Final[str] = "Asia/Ho_Chi_Minh"
 TOURNAMENT_START_HOUR: Final[int] = 1
 TOURNAMENT_END_HOUR: Final[int] = 5

@@ -1,30 +1,22 @@
 services:
   - type: web
-    name: ottv2-test
+    name: ottv2-demo
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
     healthCheckPath: /healthz
     envVars:
+      - key: OTTV2_DEMO_MODE
+        value: "1"
       - key: OTTV2_DATABASE_URL
-        sync: false
+        value: sqlite:////app/storage/ottv2.db
       - key: OTTV2_SECRET_KEY
         generateValue: true
       - key: OTTV2_COOKIE_SECURE
         value: "1"
       - key: OTTV2_REQUIRE_REMOTE_SANDBOX
-        value: "1"
-      - key: OTTV2_SANDBOX_URL
+        value: "0"
+      - key: OTTV2_BOOTSTRAP_ADMIN_ID
         sync: false
-      - key: OTTV2_SANDBOX_TOKEN
+      - key: OTTV2_BOOTSTRAP_ADMIN_PASSWORD
         sync: false
-      - key: OTTV2_S3_ENDPOINT
-        sync: false
-      - key: OTTV2_S3_BUCKET
-        sync: false
-      - key: OTTV2_S3_ACCESS_KEY_ID
-        sync: false
-      - key: OTTV2_S3_SECRET_ACCESS_KEY
-        sync: false
-      - key: OTTV2_S3_REGION
-        value: auto

@@ -28,11 +28,12 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import Engine, desc, func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import config
-from accounts import create_user
+from accounts import bootstrap_admin, create_user
 from admin_workflows import AdminWorkflows
 from db import create_database_engine, initialize_database
 from engine import OTTGame
@@ -53,6 +54,12 @@ class LoginRequest(BaseModel):
 
     student_id: str = Field(min_length=3, max_length=32)
     password: str = Field(min_length=1, max_length=256)
+
+
+class InviteParticipantRequest(BaseModel):
+    """Student identifier for an admin-created participant account."""
+
+    student_id: str = Field(min_length=3, max_length=32)
 
 
 class SubmissionLockRequest(BaseModel):
@@ -96,6 +103,22 @@ def create_app(
 ) -> FastAPI:
     """Tạo ứng dụng để chạy production hoặc kiểm thử với tài nguyên tạm."""
     active_engine = database_engine or create_database_engine()
+    if config.DEMO_MODE:
+        configured_storage = any(
+            os.environ.get(name)
+            for name in (
+                "OTTV2_S3_ENDPOINT",
+                "OTTV2_S3_BUCKET",
+                "OTTV2_S3_ACCESS_KEY_ID",
+                "OTTV2_S3_SECRET_ACCESS_KEY",
+            )
+        )
+        if not config.DATABASE_URL.startswith("sqlite:") or active_engine.dialect.name != "sqlite":
+            raise RuntimeError("Demo mode requires a local SQLite database")
+        if config.REQUIRE_REMOTE_SANDBOX or config.SANDBOX_URL or config.SANDBOX_TOKEN:
+            raise RuntimeError("Demo mode cannot use a remote sandbox")
+        if configured_storage:
+            raise RuntimeError("Demo mode cannot use external object storage")
     object_storage = ObjectStorage.from_environment()
     if config.REQUIRE_REMOTE_SANDBOX:
         if not config.DATABASE_URL.startswith("postgresql+psycopg://"):
@@ -124,6 +147,18 @@ def create_app(
         del application
         if initialize_schema:
             initialize_database(active_engine)
+            bootstrap_id = os.environ.get(config.BOOTSTRAP_ADMIN_ID_ENV, "")
+            bootstrap_password = os.environ.get(config.BOOTSTRAP_ADMIN_PASSWORD_ENV, "")
+            if bool(bootstrap_id) != bool(bootstrap_password):
+                raise RuntimeError("Both bootstrap administrator environment variables are required")
+            if config.DEMO_MODE and not bootstrap_id:
+                raise RuntimeError("Demo mode requires bootstrap administrator environment variables")
+            if bootstrap_id:
+                with sessions() as session:
+                    try:
+                        bootstrap_admin(session, bootstrap_id, bootstrap_password)
+                    except IntegrityError:
+                        session.rollback()
         yield
 
     app = FastAPI(title="OTTv2 API", version="1.0.0", lifespan=lifespan)
@@ -336,6 +371,33 @@ def create_app(
         response.delete_cookie(config.SESSION_COOKIE_NAME, path="/")
         response.delete_cookie(config.CSRF_COOKIE_NAME, path="/")
         return response
+
+    @app.post("/admin/accounts")
+    def admin_invite_participant(
+        payload: InviteParticipantRequest,
+        request: Request,
+        user: User = Depends(current_user),
+        session: Session = Depends(database_session),
+    ) -> dict[str, str]:
+        """Create a participant and return its generated initial password once."""
+        require_csrf(request)
+        if not user.is_admin:
+            raise _api_error(403, "ADMIN_REQUIRED", "Bạn không có quyền quản trị")
+        if re.fullmatch(config.STUDENT_ID_PATTERN, payload.student_id) is None:
+            raise _api_error(422, "INVALID_STUDENT_ID", "Mã thí sinh không hợp lệ")
+        if session.get(User, payload.student_id) is not None:
+            raise _api_error(409, "ACCOUNT_ALREADY_EXISTS", "Mã thí sinh đã được sử dụng")
+        initial_password = secrets.token_urlsafe(24)
+        try:
+            create_user(session, payload.student_id, initial_password)
+        except IntegrityError:
+            session.rollback()
+            raise _api_error(409, "ACCOUNT_ALREADY_EXISTS", "Mã thí sinh đã được sử dụng")
+        logger.info(
+            "participant_account_invited",
+            extra={"admin_id": user.student_id, "student_id": payload.student_id},
+        )
+        return {"student_id": payload.student_id, "initial_password": initial_password}
 
     @app.post("/api/submit")
     def submit(

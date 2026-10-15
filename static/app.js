@@ -47,6 +47,9 @@
     adminLockToggle: byId("admin-lock-toggle"),
     adminScore: byId("admin-score"),
     adminPublish: byId("admin-publish"),
+    adminInviteForm: byId("admin-invite-form"),
+    adminInviteButton: byId("admin-invite-button"),
+    adminInviteFeedback: byId("admin-invite-feedback"),
     copyBotSample: byId("copy-bot-sample"),
   };
 
@@ -276,6 +279,8 @@
     ui.loginOpen.classList.remove("hidden");
     ui.logout.classList.add("hidden");
     ui.adminTools.classList.add("hidden");
+    ui.adminInviteFeedback.textContent = "";
+    ui.adminInviteFeedback.classList.remove("is-error");
     state.adminControl = null;
     ui.submissionMeta.classList.add("hidden");
     byId("personal-days").textContent = "Đăng nhập để xem kết quả";
@@ -366,6 +371,29 @@
     if (body !== undefined) {
       options.headers = { "Content-Type": "application/json" };
       options.body = JSON.stringify(body);
+    }
+
+    async function handleInviteParticipant(event) {
+      event.preventDefault();
+      const studentId = new FormData(ui.adminInviteForm).get("student_id");
+      ui.adminInviteButton.disabled = true;
+      ui.adminInviteFeedback.classList.remove("is-error");
+      ui.adminInviteFeedback.textContent = "Đang tạo tài khoản…";
+      try {
+        const { data } = await api("/admin/accounts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ student_id: studentId }),
+          csrf: true,
+        });
+        ui.adminInviteFeedback.textContent = `Tài khoản ${data.student_id} đã tạo. Mật khẩu khởi tạo (chỉ hiển thị lần này): ${data.initial_password}`;
+        ui.adminInviteForm.reset();
+      } catch (error) {
+        ui.adminInviteFeedback.textContent = error.message;
+        ui.adminInviteFeedback.classList.add("is-error");
+      } finally {
+        ui.adminInviteButton.disabled = false;
+      }
     }
     ui.adminFeedback.textContent = "Đang xử lý…";
     try {
@@ -685,6 +713,7 @@
       const day = state.adminControl?.day_no || state.status?.day_no || 1;
       handleAdminAction(`/admin/publish?day=${day}`, undefined, "Bảng xếp hạng đã được công bố.");
     });
+    ui.adminInviteForm.addEventListener("submit", handleInviteParticipant);
     byId("step-back").addEventListener("click", () => stepReplay(-1));
     byId("step-forward").addEventListener("click", () => stepReplay(1));
     ui.playToggle.addEventListener("click", toggleReplay);
