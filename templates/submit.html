@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Nộp bot | OTTv2{% endblock %}
+{% block content %}
+  <section class="masthead">
+    <div class="masthead-copy"><p class="eyebrow"><span class="eyebrow-dot"></span> KHU VỰC THÍ SINH</p><h1>Nộp bot</h1><p class="masthead-subtitle">Tải lên phiên bản bot Python để tham gia mùa giải.</p></div>
+    <div class="masthead-aside"><span class="aside-label">TÀI NGUYÊN MỖI LƯỢT</span><p class="resource-line"><strong>0,2 giây CPU</strong> · <strong>256 MB RAM</strong></p></div>
+  </section>
+  <section class="submission-panel page-section standalone-panel" aria-labelledby="submission-title">
+    <div class="panel-topline"><p class="eyebrow">TÀI KHOẢN THÍ SINH</p><span id="submission-status" class="small-status">CẦN ĐĂNG NHẬP</span></div>
+    <h2 id="submission-title">Gửi phiên bản mới</h2>
+    <p class="panel-description">Bản Python mới nhất sẽ được lưu vào hồ sơ của bạn. Tệp tối đa 100 KB.</p>
+    <form id="upload-form">
+      <label id="drop-zone" class="drop-zone" for="bot-file">
+        <input id="bot-file" name="file" type="file" accept=".py,text/x-python" hidden>
+        <span class="upload-icon" aria-hidden="true">↑</span><span class="drop-title">Thả tệp .py vào đây</span><span class="drop-caption">hoặc <u>chọn từ thiết bị</u> · tối đa 100 KB</span><span id="selected-file" class="selected-file hidden"></span>
+      </label>
+      <button id="submit-button" class="button button-green submit-button" type="submit" disabled><span>Nộp bài</span><span aria-hidden="true">↗</span></button>
+    </form>
+    <div id="submit-feedback" class="feedback hidden" role="status" aria-live="polite"></div>
+    <div id="submission-meta" class="submission-meta hidden"></div>
+  </section>
+  <section class="guide-section">
+    <div class="guide-heading"><div><p class="eyebrow">ĐỊNH DẠNG BOT</p><h2>Điều kiện trước khi gửi</h2><p class="guide-intro">Định nghĩa hàm make_move(board, valid_moves, player), lưu tệp UTF-8 đuôi .py và luôn trả về một nước đi hợp lệ.</p></div></div>
+    <div class="limits-note"><strong>Giới hạn</strong><span>0,2 giây/nước · 10 giây/ván · RAM 256 MB · tệp 100 KB</span></div>
+  </section>
+{% endblock %}

@@ -50,6 +50,8 @@
     adminInviteForm: byId("admin-invite-form"),
     adminInviteButton: byId("admin-invite-button"),
     adminInviteFeedback: byId("admin-invite-feedback"),
+    adminNavLink: byId("admin-nav-link"),
+    adminAccessMessage: byId("admin-access-message"),
     copyBotSample: byId("copy-bot-sample"),
   };
 
@@ -105,21 +107,31 @@
       const { data } = await api("/api/status");
       state.status = data;
       const statusText = statusLabel(data.status);
-      byId("status-label").textContent = statusText;
-      byId("status-light").className = `status-light ${data.status === "OPEN" || data.status === "PUBLISHED" ? "is-open" : data.status === "RUNNING" ? "is-running" : "is-locked"}`;
-      byId("event-day").textContent = `Ngày ${data.day_no} · Vòng ${data.round_no}`;
-      byId("progress-day").textContent = `Ngày ${data.day_no} / 35`;
-      byId("progress-round").textContent = `Vòng ${data.round_no} / 5`;
-      byId("tab-round-number").textContent = data.round_no;
-      byId("season-progress").style.width = `${Math.min(100, (data.day_no / 35) * 100)}%`;
+      const statusLabelElement = byId("status-label");
+      const statusLight = byId("status-light");
+      if (statusLabelElement) statusLabelElement.textContent = statusText;
+      if (statusLight) statusLight.className = `status-light ${data.status === "OPEN" || data.status === "PUBLISHED" ? "is-open" : data.status === "RUNNING" ? "is-running" : "is-locked"}`;
+      const eventDay = byId("event-day");
+      if (eventDay) eventDay.textContent = `Ngày ${data.day_no} · Vòng ${data.round_no}`;
+      const progressDay = byId("progress-day");
+      if (progressDay) progressDay.textContent = `Ngày ${data.day_no} / 35`;
+      const progressRound = byId("progress-round");
+      if (progressRound) progressRound.textContent = `Vòng ${data.round_no} / 5`;
+      const roundNumber = byId("tab-round-number");
+      if (roundNumber) roundNumber.textContent = data.round_no;
+      const seasonProgress = byId("season-progress");
+      if (seasonProgress) seasonProgress.style.width = `${Math.min(100, (data.day_no / 35) * 100)}%`;
       updateSubmitLock();
     } catch (error) {
-      byId("status-label").textContent = "Mất kết nối";
-      byId("status-light").className = "status-light is-locked";
+      const statusLabelElement = byId("status-label");
+      const statusLight = byId("status-light");
+      if (statusLabelElement) statusLabelElement.textContent = "Mất kết nối";
+      if (statusLight) statusLight.className = "status-light is-locked";
     }
   }
 
   function updateSubmitLock() {
+    if (!ui.submitButton) return;
     const locked = !state.status || ["LOCKED", "RUNNING"].includes(state.status.status);
     const loggedIn = Boolean(state.studentId);
     ui.submitButton.disabled = locked || !loggedIn || !ui.fileInput.files.length;
@@ -144,6 +156,7 @@
   }
 
   async function loadLeaderboard(force = false) {
+    if (!ui.leaderboardRows) return;
     const path = leaderboardPath();
     const cacheKey = path;
     const headers = {};
@@ -161,7 +174,8 @@
         const responseEtag = response.headers.get("etag");
         if (responseEtag) state.etags.set(cacheKey, responseEtag);
         const generated = data?.meta?.generated_at;
-        byId("leaderboard-updated").textContent = generated ? `Cập nhật ${formatTime(generated)}` : "Bảng xếp hạng mới nhất";
+        const updatedLabel = byId("leaderboard-updated");
+        if (updatedLabel) updatedLabel.textContent = generated ? `Cập nhật ${formatTime(generated)}` : "Bảng xếp hạng mới nhất";
       }
       state.page = 0;
       renderLeaderboard();
@@ -179,6 +193,7 @@
   }
 
   function renderLeaderboard() {
+    if (!ui.leaderboardRows || !ui.leaderboardSearch) return;
     const query = ui.leaderboardSearch.value.trim().toLowerCase();
     const filtered = state.entries.filter((entry) => escapeText(entry.student_id).toLowerCase().includes(query));
     const pageCount = Math.max(1, Math.ceil(filtered.length / state.pageSize));
@@ -263,12 +278,14 @@
   function setLoggedIn(studentId, isAdmin = false) {
     state.studentId = studentId;
     state.isAdmin = Boolean(isAdmin);
-    ui.loginOpen.classList.add("hidden");
-    ui.logout.classList.remove("hidden");
-    ui.adminTools.classList.toggle("hidden", !state.isAdmin);
+    ui.loginOpen?.classList.add("hidden");
+    ui.logout?.classList.remove("hidden");
+    ui.adminTools?.classList.toggle("hidden", !state.isAdmin);
+    ui.adminNavLink?.classList.toggle("hidden", !state.isAdmin);
+    ui.adminAccessMessage?.classList.toggle("hidden", state.isAdmin);
     updateSubmitLock();
     loadPrivateData();
-    if (state.isAdmin) loadAdminControl();
+    if (state.isAdmin && ui.adminTools) loadAdminControl();
     renderLeaderboard();
   }
 
@@ -276,20 +293,30 @@
     state.studentId = "";
     state.isAdmin = false;
     state.csrf = "";
-    ui.loginOpen.classList.remove("hidden");
-    ui.logout.classList.add("hidden");
-    ui.adminTools.classList.add("hidden");
-    ui.adminInviteFeedback.textContent = "";
-    ui.adminInviteFeedback.classList.remove("is-error");
+    ui.loginOpen?.classList.remove("hidden");
+    ui.logout?.classList.add("hidden");
+    ui.adminTools?.classList.add("hidden");
+    ui.adminNavLink?.classList.add("hidden");
+    ui.adminAccessMessage?.classList.remove("hidden");
+    if (ui.adminInviteFeedback) {
+      ui.adminInviteFeedback.textContent = "";
+      ui.adminInviteFeedback.classList.remove("is-error");
+    }
     state.adminControl = null;
-    ui.submissionMeta.classList.add("hidden");
-    byId("personal-days").textContent = "Đăng nhập để xem kết quả";
-    byId("personal-rank").textContent = "—";
-    byId("rank-chart").replaceChildren();
-    byId("recent-games-list").replaceChildren();
-    byId("recent-games-list").append(makeText("p", "muted-text", "Đăng nhập để xem ván đấu."));
-    byId("replay-quota").textContent = "0 / 0";
-    ui.replayList.replaceChildren(makeText("p", "muted-text", "Đăng nhập để xem replay."));
+    ui.submissionMeta?.classList.add("hidden");
+    const personalDays = byId("personal-days");
+    if (personalDays) personalDays.textContent = "Đăng nhập để xem kết quả";
+    const personalRank = byId("personal-rank");
+    if (personalRank) personalRank.textContent = "—";
+    byId("rank-chart")?.replaceChildren();
+    const recentGames = byId("recent-games-list");
+    if (recentGames) {
+      recentGames.replaceChildren();
+      recentGames.append(makeText("p", "muted-text", "Đăng nhập để xem ván đấu."));
+    }
+    const replayQuota = byId("replay-quota");
+    if (replayQuota) replayQuota.textContent = "0 / 0";
+    ui.replayList?.replaceChildren(makeText("p", "muted-text", "Đăng nhập để xem replay."));
     state.replayFrames = [];
     state.replayData = null;
     drawBoard(null);
@@ -299,10 +326,15 @@
 
   async function loadPrivateData() {
     if (!state.studentId) return;
-    await Promise.allSettled([loadSubmission(), loadPersonalResults(), loadReplays()]);
+    const loaders = [];
+    if (ui.submissionMeta) loaders.push(loadSubmission());
+    if (byId("personal-rank")) loaders.push(loadPersonalResults());
+    if (ui.replayList) loaders.push(loadReplays());
+    await Promise.allSettled(loaders);
   }
 
   async function loadSubmission() {
+    if (!ui.submissionMeta) return;
     try {
       const { data } = await api("/api/my/submission");
       ui.submissionMeta.replaceChildren();
@@ -313,18 +345,21 @@
       download.textContent = "Tải bài của bạn ↓";
       ui.submissionMeta.append(version, digest, download);
       ui.submissionMeta.classList.remove("hidden");
-      byId("submission-status").textContent = "ĐÃ CÓ BÀI";
+      const status = byId("submission-status");
+      if (status) status.textContent = "ĐÃ CÓ BÀI";
     } catch (error) {
       if (error.status !== 404) showToast(error.message, true);
     }
   }
 
   async function loadPersonalResults() {
+    if (!byId("personal-rank")) return;
     try {
       const { data } = await api("/api/my/results");
       state.isAdmin = Boolean(data.is_admin);
-      ui.adminTools.classList.toggle("hidden", !state.isAdmin);
-      if (state.isAdmin) loadAdminControl();
+      ui.adminTools?.classList.toggle("hidden", !state.isAdmin);
+      ui.adminNavLink?.classList.toggle("hidden", !state.isAdmin);
+      if (state.isAdmin && ui.adminTools) loadAdminControl();
       renderRankChart(data.results || []);
       const played = (data.results || []).filter((result) => !result.absent);
       const latest = played.at(-1);
@@ -347,7 +382,7 @@
   }
 
   async function loadAdminControl() {
-    if (!state.isAdmin) return;
+    if (!state.isAdmin || !ui.adminTools) return;
     try {
       const { data } = await api("/admin/control");
       state.adminControl = data;
@@ -372,29 +407,6 @@
       options.headers = { "Content-Type": "application/json" };
       options.body = JSON.stringify(body);
     }
-
-    async function handleInviteParticipant(event) {
-      event.preventDefault();
-      const studentId = new FormData(ui.adminInviteForm).get("student_id");
-      ui.adminInviteButton.disabled = true;
-      ui.adminInviteFeedback.classList.remove("is-error");
-      ui.adminInviteFeedback.textContent = "Đang tạo tài khoản…";
-      try {
-        const { data } = await api("/admin/accounts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ student_id: studentId }),
-          csrf: true,
-        });
-        ui.adminInviteFeedback.textContent = `Tài khoản ${data.student_id} đã tạo. Mật khẩu khởi tạo (chỉ hiển thị lần này): ${data.initial_password}`;
-        ui.adminInviteForm.reset();
-      } catch (error) {
-        ui.adminInviteFeedback.textContent = error.message;
-        ui.adminInviteFeedback.classList.add("is-error");
-      } finally {
-        ui.adminInviteButton.disabled = false;
-      }
-    }
     ui.adminFeedback.textContent = "Đang xử lý…";
     try {
       const { data } = await api(path, options);
@@ -409,8 +421,35 @@
     }
   }
 
+  async function handleInviteParticipant(event) {
+    event.preventDefault();
+    const form = new FormData(ui.adminInviteForm);
+    ui.adminInviteButton.disabled = true;
+    ui.adminInviteFeedback.classList.remove("is-error");
+    ui.adminInviteFeedback.textContent = "Đang tạo tài khoản…";
+    try {
+      const { data } = await api("/admin/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          student_id: form.get("student_id"),
+          password: form.get("password"),
+        }),
+        csrf: true,
+      });
+      ui.adminInviteFeedback.textContent = `Đã tạo tài khoản ${data.student_id}. Bạn có thể gửi thông tin đăng nhập đã đặt cho thí sinh.`;
+      ui.adminInviteForm.reset();
+    } catch (error) {
+      ui.adminInviteFeedback.textContent = error.message;
+      ui.adminInviteFeedback.classList.add("is-error");
+    } finally {
+      ui.adminInviteButton.disabled = false;
+    }
+  }
+
   function renderRankChart(results) {
     const container = byId("rank-chart");
+    if (!container) return;
     container.replaceChildren();
     const values = results.filter((result) => Number.isFinite(Number(result.rank))).slice(-12);
     if (!values.length) {
@@ -454,7 +493,7 @@
   }
 
   async function loadReplays() {
-    if (!state.studentId) return;
+    if (!state.studentId || !ui.replayList) return;
     const day = state.status?.day_no || 1;
     try {
       const { data } = await api(`/api/my/replays?day=${encodeURIComponent(day)}`);
@@ -513,6 +552,7 @@
   }
 
   function drawCurrentFrame() {
+    if (!ui.replayBoard) return;
     if (!state.replayFrames.length) return drawBoard(null);
     const frame = state.replayFrames[state.replayIndex];
     drawBoard(frame);
@@ -525,6 +565,7 @@
   }
 
   function drawBoard(frame) {
+    if (!ui.replayBoard) return;
     const board = frame?.board || Array.from({ length: 9 }, () => Array(9).fill(null));
     const move = frame?.move;
     const from = move?.[0];
@@ -590,7 +631,7 @@
   }
 
   function selectFile(file) {
-    if (!file) return;
+    if (!file || !ui.fileInput || !ui.selectedFile || !ui.submitButton || !ui.dropZone) return;
     const isPython = file.name.toLowerCase().endsWith(".py");
     const sizeOk = file.size <= 100 * 1024;
     ui.fileInput.setCustomValidity(!isPython ? "Chỉ chọn tệp .py" : !sizeOk ? "Tệp vượt quá 100 KB" : "");
@@ -661,21 +702,25 @@
   function setTheme(theme) {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("ottv2-theme", theme);
-    byId("theme-toggle").setAttribute("aria-label", theme === "dark" ? "Bật giao diện sáng" : "Bật giao diện tối");
-    byId("theme-toggle").textContent = theme === "dark" ? "☼" : "◐";
+    const themeToggle = byId("theme-toggle");
+    if (themeToggle) {
+      themeToggle.setAttribute("aria-label", theme === "dark" ? "Bật giao diện sáng" : "Bật giao diện tối");
+      themeToggle.textContent = theme === "dark" ? "☼" : "◐";
+    }
   }
 
   function bindEvents() {
-    ui.loginOpen.addEventListener("click", () => ui.loginDialog.showModal());
-    byId("login-close").addEventListener("click", () => ui.loginDialog.close());
-    ui.loginDialog.addEventListener("click", (event) => { if (event.target === ui.loginDialog) ui.loginDialog.close(); });
-    ui.loginForm.addEventListener("submit", handleLogin);
-    ui.logout.addEventListener("click", handleLogout);
-    ui.uploadForm.addEventListener("submit", handleUpload);
-    ui.fileInput.addEventListener("change", () => selectFile(ui.fileInput.files[0]));
-    ["dragenter", "dragover"].forEach((name) => ui.dropZone.addEventListener(name, (event) => { event.preventDefault(); ui.dropZone.classList.add("is-dragging"); }));
-    ["dragleave", "drop"].forEach((name) => ui.dropZone.addEventListener(name, (event) => { event.preventDefault(); ui.dropZone.classList.remove("is-dragging"); }));
-    ui.dropZone.addEventListener("drop", (event) => {
+    const on = (element, eventName, handler) => element?.addEventListener(eventName, handler);
+    on(ui.loginOpen, "click", () => ui.loginDialog.showModal());
+    on(byId("login-close"), "click", () => ui.loginDialog.close());
+    on(ui.loginDialog, "click", (event) => { if (event.target === ui.loginDialog) ui.loginDialog.close(); });
+    on(ui.loginForm, "submit", handleLogin);
+    on(ui.logout, "click", handleLogout);
+    on(ui.uploadForm, "submit", handleUpload);
+    on(ui.fileInput, "change", () => selectFile(ui.fileInput.files[0]));
+    ["dragenter", "dragover"].forEach((name) => on(ui.dropZone, name, (event) => { event.preventDefault(); ui.dropZone.classList.add("is-dragging"); }));
+    ["dragleave", "drop"].forEach((name) => on(ui.dropZone, name, (event) => { event.preventDefault(); ui.dropZone.classList.remove("is-dragging"); }));
+    on(ui.dropZone, "drop", (event) => {
       const file = event.dataTransfer?.files?.[0];
       if (!file) return;
       const transfer = new DataTransfer();
@@ -693,11 +738,11 @@
       });
       loadLeaderboard();
     }));
-    ui.leaderboardSearch.addEventListener("input", () => { state.page = 0; renderLeaderboard(); });
-    byId("page-prev").addEventListener("click", () => { state.page = Math.max(0, state.page - 1); renderLeaderboard(); });
-    byId("page-next").addEventListener("click", () => { state.page += 1; renderLeaderboard(); });
-    byId("reload-personal").addEventListener("click", loadPrivateData);
-    ui.adminLockToggle.addEventListener("click", () => {
+    on(ui.leaderboardSearch, "input", () => { state.page = 0; renderLeaderboard(); });
+    on(byId("page-prev"), "click", () => { state.page = Math.max(0, state.page - 1); renderLeaderboard(); });
+    on(byId("page-next"), "click", () => { state.page += 1; renderLeaderboard(); });
+    on(byId("reload-personal"), "click", loadPrivateData);
+    on(ui.adminLockToggle, "click", () => {
       const locked = !state.adminControl?.locked;
       handleAdminAction(
         "/admin/submissions/lock",
@@ -705,22 +750,22 @@
         locked ? "Đã khóa nhận bài." : "Đã mở nhận bài.",
       );
     });
-    ui.adminScore.addEventListener("click", () => {
+    on(ui.adminScore, "click", () => {
       const day = state.adminControl?.day_no || state.status?.day_no || 1;
       handleAdminAction(`/admin/score?day=${day}`, undefined, "Lượt chấm đã được xếp hàng.");
     });
-    ui.adminPublish.addEventListener("click", () => {
+    on(ui.adminPublish, "click", () => {
       const day = state.adminControl?.day_no || state.status?.day_no || 1;
       handleAdminAction(`/admin/publish?day=${day}`, undefined, "Bảng xếp hạng đã được công bố.");
     });
-    ui.adminInviteForm.addEventListener("submit", handleInviteParticipant);
-    byId("step-back").addEventListener("click", () => stepReplay(-1));
-    byId("step-forward").addEventListener("click", () => stepReplay(1));
-    ui.playToggle.addEventListener("click", toggleReplay);
-    ui.slider.addEventListener("input", () => { state.replayIndex = Number(ui.slider.value); drawCurrentFrame(); });
-    byId("play-speed").addEventListener("change", () => { if (state.playTimer) { stopReplay(); toggleReplay(); } });
-    byId("theme-toggle").addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
-    ui.copyBotSample.addEventListener("click", async () => {
+    on(ui.adminInviteForm, "submit", handleInviteParticipant);
+    on(byId("step-back"), "click", () => stepReplay(-1));
+    on(byId("step-forward"), "click", () => stepReplay(1));
+    on(ui.playToggle, "click", toggleReplay);
+    on(ui.slider, "input", () => { state.replayIndex = Number(ui.slider.value); drawCurrentFrame(); });
+    on(byId("play-speed"), "change", () => { if (state.playTimer) { stopReplay(); toggleReplay(); } });
+    on(byId("theme-toggle"), "click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
+    on(ui.copyBotSample, "click", async () => {
       const source = byId("bot-sample").innerText;
       try {
         await navigator.clipboard.writeText(source);
@@ -732,7 +777,7 @@
     });
     document.addEventListener("keydown", (event) => {
       if (event.target.matches("input, textarea, select, [contenteditable='true']")) return;
-      if (event.key === "/" && !ui.loginDialog.open) { event.preventDefault(); ui.leaderboardSearch.focus(); }
+      if (event.key === "/" && ui.leaderboardSearch && !ui.loginDialog?.open) { event.preventDefault(); ui.leaderboardSearch.focus(); }
       if (event.key === "ArrowLeft") stepReplay(-1);
       if (event.key === "ArrowRight") stepReplay(1);
       if (event.code === "Space" && state.replayFrames.length) { event.preventDefault(); toggleReplay(); }
@@ -744,7 +789,7 @@
     bindEvents();
     state.csrf = cookieValue("ottv2_csrf");
     await loadStatus();
-    await loadLeaderboard();
+    if (ui.leaderboardRows) await loadLeaderboard();
     window.setInterval(loadStatus, 30000);
     if (cookieValue("ottv2_session")) {
       try {

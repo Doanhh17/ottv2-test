@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Hồ sơ và ván đấu | OTTv2{% endblock %}
+{% block content %}
+  <section class="masthead"><div class="masthead-copy"><p class="eyebrow"><span class="eyebrow-dot"></span> THỐNG KÊ CÁ NHÂN</p><h1>Hồ sơ & ván đấu</h1><p class="masthead-subtitle">Xem tiến độ, kết quả và replay được cấp cho tài khoản của bạn.</p></div></section>
+  <section class="personal-panel page-section standalone-panel" aria-labelledby="personal-title">
+    <div class="section-heading compact-heading"><div><p class="eyebrow">HỒ SƠ CỦA BẠN</p><h2 id="personal-title">Đường đua</h2></div><span id="personal-rank" class="personal-rank">—</span></div>
+    <div id="rank-chart" class="rank-chart" role="img" aria-label="Biểu đồ thứ hạng cá nhân"></div>
+    <div class="personal-footer"><span id="personal-days">Đăng nhập để xem kết quả</span><span class="chart-key"><i></i> Rank ngày</span></div>
+    <div class="recent-games"><div class="recent-heading"><span>VÁN GẦN ĐÂY</span><button id="reload-personal" class="text-button" type="button" aria-label="Tải lại kết quả">↻</button></div><div id="recent-games-list" class="recent-list"><p class="muted-text">Đăng nhập để xem ván đấu.</p></div></div>
+  </section>
+  <section class="replay-section" aria-labelledby="replay-title">
+    <div class="section-heading replay-heading"><div><p class="eyebrow">PHÒNG PHÂN TÍCH</p><h2 id="replay-title">Replay</h2></div><div class="replay-quota"><strong id="replay-quota">0 / 0</strong><span>ván được mở</span></div></div>
+    <div class="replay-workspace">
+      <div class="replay-list-column"><div class="replay-list-heading"><span>REPLAY ĐƯỢC CẤP</span><span id="replay-day-label">Hôm nay</span></div><div id="replay-list" class="replay-list"><p class="muted-text">Đăng nhập để xem replay.</p></div><p class="quota-note">Replay được chọn theo giai đoạn thi đấu sâu nhất.</p></div>
+      <div class="replay-stage">
+        <div class="replay-stage-top"><div><span id="replay-stage-label" class="stage-label">CHỌN MỘT VÁN</span><h3 id="replay-match-title">Bàn đấu OTTv2</h3></div><span id="replay-result" class="result-pill">9 × 9</span></div>
+        <div class="board-wrap"><div id="board-columns" class="board-labels board-columns" aria-hidden="true"></div><div class="board-with-rows"><div id="board-rows" class="board-labels board-rows" aria-hidden="true"></div><div id="replay-board" class="game-board" role="grid" aria-label="Bàn cờ Oẳn Tù Tì 9 nhân 9"></div></div></div>
+        <div class="board-legend"><span><i class="camp-dot camp-one"></i>Phe 1 · a1</span><span><i class="camp-dot camp-two"></i>Phe 2 · i9</span><span id="captured-label">Quân bị ăn: —</span></div>
+        <div class="replay-controls"><button id="step-back" class="icon-button control-button" type="button" aria-label="Lùi một nước" disabled>←</button><button id="play-toggle" class="play-button" type="button" aria-label="Phát replay" disabled>▶</button><button id="step-forward" class="icon-button control-button" type="button" aria-label="Tiến một nước" disabled>→</button><label class="visually-hidden" for="replay-slider">Chọn nước đi</label><input id="replay-slider" class="replay-slider" type="range" min="0" max="0" value="0" disabled><span id="ply-label" class="ply-label">0 / 0</span><label class="visually-hidden" for="play-speed">Tốc độ replay</label><select id="play-speed" class="speed-select" aria-label="Tốc độ replay"><option value="2000">0,5×</option><option value="1000" selected>1×</option><option value="500">2×</option></select></div>
+        <p id="win-reason" class="win-reason">← → để chuyển nước · Space để phát / tạm dừng</p>
+      </div>
+    </div>
+  </section>
+{% endblock %}

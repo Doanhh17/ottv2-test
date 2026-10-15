@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="vi" data-page="{{ page }}" data-template="{{ template_name }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f7f5">
+  <meta name="description" content="OTTv2 Bot Programming Arena">
+  <title>{% block title %}OTTv2 | Bot Programming Arena{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Đến nội dung chính</a>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="OTTv2, bảng xếp hạng">
+      <span class="brand-mark" aria-hidden="true"><span>O</span><i></i></span>
+      <span class="brand-name">OTT<span>v2</span></span>
+      <span class="brand-divider" aria-hidden="true"></span>
+      <span class="brand-caption">BOT ARENA</span>
+    </a>
+    <nav class="main-nav" aria-label="Điều hướng chính">
+      <a class="{% if page == 'dashboard' %}active{% endif %}" href="/">Bảng xếp hạng</a>
+      <a class="{% if page == 'submit' %}active{% endif %}" href="/submit">Nộp bot</a>
+      <a class="{% if page == 'profile' %}active{% endif %}" href="/profile">Hồ sơ & ván đấu</a>
+      <a id="admin-nav-link" class="{% if page == 'admin' %}active{% endif %} hidden" href="/admin">Quản trị</a>
+    </nav>
+    <div class="topbar-right">
+      <div class="event-chip" aria-live="polite">
+        <span id="status-light" class="status-light"></span>
+        <span id="status-label">Đang kết nối</span>
+        <span class="chip-divider">/</span>
+        <span id="event-day">Ngày -- · Vòng --</span>
+      </div>
+      <button id="theme-toggle" class="icon-button" type="button" aria-label="Bật giao diện tối" title="Đổi giao diện">◐</button>
+      <button id="login-open" class="button button-dark button-small" type="button">Đăng nhập <span aria-hidden="true">↗</span></button>
+      <button id="logout-button" class="button button-quiet button-small hidden" type="button">Đăng xuất</button>
+    </div>
+  </header>
+
+  <main id="main-content" class="page-shell">
+    {% block content %}{% endblock %}
+    <footer class="page-footer"><span>OTTv2 <b>BOT ARENA</b></span><span>Giải đấu bot · Việt Nam</span><a href="/">Bảng xếp hạng ↑</a></footer>
+  </main>
+
+  <dialog id="login-dialog" class="login-dialog" aria-labelledby="login-title">
+    <form id="login-form" class="login-form">
+      <button id="login-close" class="dialog-close icon-button" type="button" aria-label="Đóng">×</button>
+      <p class="eyebrow">OTTv2 · THÍ SINH</p>
+      <h2 id="login-title">Trở lại bàn đấu.</h2>
+      <label for="student-id">Mã thí sinh</label>
+      <input id="student-id" name="student_id" autocomplete="username" required minlength="3" maxlength="32">
+      <label for="password">Mật khẩu</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <p id="login-error" class="inline-error hidden" role="alert"></p>
+      <button class="button button-dark dialog-submit" type="submit">Đăng nhập <span aria-hidden="true">↗</span></button>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Quản trị | OTTv2{% endblock %}
+{% block content %}
+  <section class="masthead"><div class="masthead-copy"><p class="eyebrow"><span class="eyebrow-dot"></span> KHU VỰC QUẢN TRỊ</p><h1>Điều hành</h1><p class="masthead-subtitle">Quản lý lượt chấm, công bố kết quả và cấp tài khoản thí sinh.</p></div></section>
+  <section id="admin-tools" class="admin-panel page-section standalone-panel hidden" aria-labelledby="admin-title">
+    <div class="admin-panel-heading"><div><p class="eyebrow">QUẢN TRỊ CUỘC THI</p><h2 id="admin-title">Điều hành mùa giải</h2></div><span id="admin-run-status" class="admin-run-status">CHƯA CÓ LƯỢT CHẤM</span></div>
+    <p id="admin-day-label" class="admin-day-label">Ngày -- · Vòng --</p>
+    <button id="admin-lock-toggle" class="button button-admin-lock" type="button">Khóa nhận bài</button>
+    <div class="admin-actions"><button id="admin-score" class="button button-dark" type="button" disabled>Chấm điểm</button><button id="admin-publish" class="button button-quiet" type="button" disabled>Công bố BXH</button></div>
+    <p id="admin-feedback" class="admin-feedback" aria-live="polite">Khóa nhận bài trước khi bắt đầu chấm.</p>
+    <div class="admin-invite">
+      <div class="admin-panel-heading"><div><p class="eyebrow">TÀI KHOẢN THÍ SINH</p><h3>Tạo tài khoản</h3></div></div>
+      <form id="admin-invite-form">
+        <label for="invite-student-id">Mã thí sinh</label>
+        <input id="invite-student-id" name="student_id" autocomplete="off" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_\-]{3,32}">
+        <label for="invite-password">Mật khẩu (ít nhất 8 ký tự)</label>
+        <input id="invite-password" name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="256">
+        <button id="admin-invite-button" class="button button-dark" type="submit">Tạo tài khoản</button>
+      </form>
+      <p class="admin-invite-note">Bạn tự đặt mật khẩu và gửi mã tài khoản cùng mật khẩu trực tiếp cho thí sinh qua kênh riêng.</p>
+      <p id="admin-invite-feedback" class="admin-feedback" aria-live="polite"></p>
+    </div>
+  </section>
+  <section id="admin-access-message" class="guide-section"><h2>Chỉ quản trị viên</h2><p>Đăng nhập bằng tài khoản quản trị để sử dụng trang này.</p></section>
+{% endblock %}

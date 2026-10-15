@@ -90,16 +90,26 @@ def test_demo_mode_rejects_remote_sandbox_and_object_storage(monkeypatch) -> Non
         create_app(database_engine=create_database_engine("sqlite:///:memory:"))
 
 
-def test_spa_and_static_assets_are_served(tmp_path: Path) -> None:
+def test_pages_and_static_assets_are_served(tmp_path: Path) -> None:
     client, database_engine, _, _, _ = make_client(tmp_path)
     try:
-        page = client.get("/")
+        pages = {
+            "/": ("dashboard.html", "leaderboard-rows"),
+            "/submit": ("submit.html", "upload-form"),
+            "/profile": ("profile.html", "replay-list"),
+            "/admin": ("admin.html", "admin-invite-form"),
+        }
         stylesheet = client.get("/static/app.css")
         script = client.get("/static/app.js")
 
-        assert page.status_code == 200
-        assert 'lang="vi"' in page.text
-        assert 'id="admin-invite-form"' in page.text
+        for path, (template, expected_id) in pages.items():
+            page = client.get(path)
+            assert page.status_code == 200
+            assert 'lang="vi"' in page.text
+            assert f'data-template="{template}"' in page.text
+            assert f'id="{expected_id}"' in page.text
+            if path == "/admin":
+                assert "Đăng nhập bằng tài khoản quản trị" in page.text
         assert stylesheet.status_code == 200
         assert "--jade" in stylesheet.text
         assert script.status_code == 200
@@ -165,13 +175,13 @@ def test_demo_bootstrap_admin_is_created_once_and_never_resets_password(
         database_engine.dispose()
 
 
-def test_admin_can_invite_participant_but_non_admin_cannot(tmp_path: Path) -> None:
+def test_admin_can_create_participant_account_but_non_admin_cannot(tmp_path: Path) -> None:
     client, database_engine, _, _, _ = make_client(tmp_path)
     try:
         alpha_csrf = login(client, "alpha")
         denied = client.post(
             "/admin/accounts",
-            json={"student_id": "new_bot"},
+            json={"student_id": "new_bot", "password": "bot-password-8"},
             headers={"X-CSRF-Token": alpha_csrf},
         )
         assert denied.status_code == 403
@@ -179,40 +189,48 @@ def test_admin_can_invite_participant_but_non_admin_cannot(tmp_path: Path) -> No
 
         admin_csrf = login(client, "charlie")
         missing_csrf = client.post(
-            "/admin/accounts", json={"student_id": "new_bot"}
+            "/admin/accounts",
+            json={"student_id": "new_bot", "password": "bot-password-8"},
         )
         assert missing_csrf.status_code == 403
 
         invited = client.post(
             "/admin/accounts",
-            json={"student_id": "new_bot"},
+            json={"student_id": "new_bot", "password": "bot-password-8"},
             headers={"X-CSRF-Token": admin_csrf},
         )
         assert invited.status_code == 200
         credentials = invited.json()
         assert credentials["student_id"] == "new_bot"
-        assert len(credentials["initial_password"]) >= 24
+        assert set(credentials) == {"student_id"}
+        assert client.get("/admin/control").status_code == 200
         assert client.post(
             "/api/auth/login",
             json={
                 "student_id": credentials["student_id"],
-                "password": credentials["initial_password"],
+                "password": "bot-password-8",
             },
         ).status_code == 200
 
         admin_csrf = login(client, "charlie")
         duplicate = client.post(
             "/admin/accounts",
-            json={"student_id": "new_bot"},
+            json={"student_id": "new_bot", "password": "bot-password-8"},
             headers={"X-CSRF-Token": admin_csrf},
         )
         assert duplicate.status_code == 409
         invalid = client.post(
             "/admin/accounts",
-            json={"student_id": "not valid"},
+            json={"student_id": "not valid", "password": "bot-password-8"},
             headers={"X-CSRF-Token": admin_csrf},
         )
         assert invalid.status_code == 422
+        weak_password = client.post(
+            "/admin/accounts",
+            json={"student_id": "weak_bot", "password": "1234567"},
+            headers={"X-CSRF-Token": admin_csrf},
+        )
+        assert weak_password.status_code == 422
     finally:
         client.close()
         database_engine.dispose()

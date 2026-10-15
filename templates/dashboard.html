@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Bảng xếp hạng | OTTv2{% endblock %}
+{% block content %}
+  <section id="top" class="masthead" aria-labelledby="page-title">
+    <div class="masthead-copy">
+      <p class="eyebrow"><span class="eyebrow-dot"></span> OTTv2 · MÙA GIẢI 2026</p>
+      <h1 id="page-title">Bảng xếp hạng</h1>
+      <p class="masthead-subtitle">Theo dõi thứ hạng và tiến độ mùa giải.</p>
+    </div>
+    <div class="masthead-aside" aria-label="Thông tin mùa giải">
+      <div class="season-meta"><span class="aside-label">TIẾN ĐỘ MÙA GIẢI</span><span class="season-code">MÙA 02 / 2026</span></div>
+      <div class="progress-track" aria-hidden="true"><span id="season-progress"></span></div>
+      <div class="progress-labels"><span id="progress-day">Ngày -- / 35</span><span id="progress-round">Vòng -- / 5</span></div>
+    </div>
+  </section>
+  <section class="leaderboard-section page-section" aria-labelledby="leaderboard-title">
+    <div class="section-heading leaderboard-heading">
+      <div><p class="eyebrow">BẢNG ĐIỂM · MÙA 02</p><h2 id="leaderboard-title">Thành tích thí sinh</h2></div>
+      <p id="leaderboard-updated" class="updated-label">Đang tải dữ liệu</p>
+    </div>
+    <div class="leaderboard-toolbar">
+      <div class="tabs" role="tablist" aria-label="Loại bảng xếp hạng">
+        <button class="tab-button active" id="tab-daily" type="button" role="tab" aria-selected="true" data-kind="daily">Hôm qua</button>
+        <button class="tab-button" id="tab-round" type="button" role="tab" aria-selected="false" data-kind="round">Vòng <span id="tab-round-number">--</span></button>
+        <button class="tab-button" id="tab-tournament" type="button" role="tab" aria-selected="false" data-kind="tournament">Toàn giải</button>
+      </div>
+      <label class="search-field"><span class="search-icon" aria-hidden="true">⌕</span><span class="visually-hidden">Tìm theo mã thí sinh</span><input id="leaderboard-search" type="search" placeholder="Tìm thí sinh" autocomplete="off"><kbd>/</kbd></label>
+    </div>
+    <div class="table-scroll">
+      <div class="leaderboard-table" role="table" aria-label="Bảng xếp hạng bot">
+        <div class="table-row table-header" role="row"><span role="columnheader">HẠNG</span><span role="columnheader">THÍ SINH</span><span role="columnheader">RANK / TB</span><span role="columnheader">NGÀY ĐẤU</span><span role="columnheader">XU HƯỚNG</span></div>
+        <div id="leaderboard-rows" aria-live="polite" aria-busy="true"><div class="loading-row"><span></span><span></span><span></span></div></div>
+      </div>
+    </div>
+    <div class="table-footer">
+      <span id="leaderboard-count">— thí sinh</span>
+      <div class="pagination" aria-label="Phân trang bảng xếp hạng"><button id="page-prev" class="icon-button pagination-button" type="button" aria-label="Trang trước" disabled>←</button><span id="page-label">Trang 1</span><button id="page-next" class="icon-button pagination-button" type="button" aria-label="Trang sau" disabled>→</button></div>
+    </div>
+    <p id="leaderboard-error" class="inline-error hidden" role="alert"></p>
+  </section>
+  <section class="guide-section" aria-labelledby="guide-title">
+    <div class="guide-heading"><div><p class="eyebrow">BẮT ĐẦU NHANH</p><h2 id="guide-title">Cách tham gia</h2><p class="guide-intro">Đăng nhập bằng tài khoản được quản trị viên cấp, chuẩn bị bot Python rồi gửi tại trang Nộp bot.</p></div><a class="button button-dark" href="/submit">Mở trang nộp bot ↗</a></div>
+  </section>
+{% endblock %}

@@ -571,6 +571,47 @@ kbd { padding: 1px 4px; border: 1px solid var(--line); border-radius: 3px; color
 .admin-invite .is-error { color: var(--coral); }
 .countdown-block { display: none; }
 
+body { font-size: 16px; }
+.topbar { gap: 18px; }
+.main-nav { display: flex; align-items: center; gap: 5px; }
+.main-nav a { padding: 9px 11px; border-radius: 4px; color: var(--muted); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.main-nav a:hover, .main-nav a.active { background: var(--jade-soft); color: var(--jade); }
+.topbar-right { flex-shrink: 0; }
+.button-small { font-size: 12px; }
+.event-chip { font-size: 12px; }
+.eyebrow, .aside-label, .table-header, .small-status, .recent-heading,
+.replay-list-heading, .guide-number, .limits-stamp { font-size: 11px; }
+.masthead-subtitle, .panel-description, .guide-intro { font-size: 14px; }
+.tab-button, .updated-label, .admin-run-status, .admin-day-label,
+.admin-feedback, .admin-invite label, .admin-invite-note,
+.guide-block p, .api-fields dd, .submit-checklist,
+.limits-note span, .security-note, .page-footer, .copy-button,
+.login-form label, .toast { font-size: 12px; }
+.admin-panel-heading h2, .admin-invite h3 { font-size: 20px; }
+.admin-actions .button, .admin-invite .button { min-height: 42px; font-size: 13px; }
+.admin-invite input { min-height: 42px; }
+.page-section { margin: 30px 0 42px; }
+.standalone-panel { max-width: 900px; padding: 25px; }
+.personal-panel.standalone-panel { padding: 23px; }
+.page-footer b { font-size: 11px; }
+
+@media (max-width: 1050px) {
+  .topbar { flex-wrap: wrap; padding-top: 9px; padding-bottom: 9px; }
+  .main-nav { order: 3; flex: 1 0 100%; overflow-x: auto; }
+}
+@media (max-width: 760px) {
+  .main-nav { gap: 2px; }
+  .main-nav a { padding: 8px 9px; font-size: 12px; }
+  .topbar { min-height: 0; }
+  .topbar-right { margin-left: auto; }
+  .button-small { font-size: 11px; }
+  .masthead { min-height: 0; padding: 25px 0 20px; }
+  .masthead h1 { font-size: 36px; }
+  .masthead-subtitle { font-size: 14px; }
+  .masthead-aside { width: 100%; padding: 0; border: 0; }
+  .standalone-panel { padding: 18px; }
+}
+
 .admin-panel {
   padding: 16px;
   border: 1px solid var(--line-strong);

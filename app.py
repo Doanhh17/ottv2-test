@@ -31,6 +31,7 @@ from sqlalchemy import Engine, desc, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.templating import Jinja2Templates
 
 import config
 from accounts import bootstrap_admin, create_user
@@ -60,6 +61,7 @@ class InviteParticipantRequest(BaseModel):
     """Student identifier for an admin-created participant account."""
 
     student_id: str = Field(min_length=3, max_length=32)
+    password: str = Field(min_length=8, max_length=256)
 
 
 class SubmissionLockRequest(BaseModel):
@@ -138,7 +140,7 @@ def create_app(
     replays_root = Path(replay_directory).resolve()
     leaderboards_root = Path(leaderboard_directory).resolve()
     static_root = config.BASE_DIR / "static"
-    template_path = config.BASE_DIR / "templates" / "index.html"
+    templates = Jinja2Templates(directory=str(config.BASE_DIR / "templates"))
     timezone = ZoneInfo(config.TIMEZONE_NAME)
 
     @asynccontextmanager
@@ -359,9 +361,40 @@ def create_app(
         }
 
     @app.get("/", include_in_schema=False)
-    def index_page() -> FileResponse:
-        """Phục vụ trang SPA OTTv2."""
-        return FileResponse(template_path, media_type="text/html")
+    def index_page(request: Request) -> Response:
+        """Phục vụ trang bảng xếp hạng."""
+        return templates.TemplateResponse(
+            request=request,
+            name="dashboard.html",
+            context={"page": "dashboard", "template_name": "dashboard.html"},
+        )
+
+    @app.get("/submit", include_in_schema=False)
+    def submission_page(request: Request) -> Response:
+        """Phục vụ trang nộp bot."""
+        return templates.TemplateResponse(
+            request=request,
+            name="submit.html",
+            context={"page": "submit", "template_name": "submit.html"},
+        )
+
+    @app.get("/profile", include_in_schema=False)
+    def profile_page(request: Request) -> Response:
+        """Phục vụ trang hồ sơ và replay."""
+        return templates.TemplateResponse(
+            request=request,
+            name="profile.html",
+            context={"page": "profile", "template_name": "profile.html"},
+        )
+
+    @app.get("/admin", include_in_schema=False)
+    def admin_page(request: Request) -> Response:
+        """Phục vụ trang quản trị; các thao tác vẫn được bảo vệ bởi API."""
+        return templates.TemplateResponse(
+            request=request,
+            name="admin.html",
+            context={"page": "admin", "template_name": "admin.html"},
+        )
 
     @app.post("/api/auth/logout")
     def logout(request: Request) -> JSONResponse:
@@ -379,7 +412,7 @@ def create_app(
         user: User = Depends(current_user),
         session: Session = Depends(database_session),
     ) -> dict[str, str]:
-        """Create a participant and return its generated initial password once."""
+        """Create a participant account using a password chosen by the administrator."""
         require_csrf(request)
         if not user.is_admin:
             raise _api_error(403, "ADMIN_REQUIRED", "Bạn không có quyền quản trị")
@@ -387,17 +420,16 @@ def create_app(
             raise _api_error(422, "INVALID_STUDENT_ID", "Mã thí sinh không hợp lệ")
         if session.get(User, payload.student_id) is not None:
             raise _api_error(409, "ACCOUNT_ALREADY_EXISTS", "Mã thí sinh đã được sử dụng")
-        initial_password = secrets.token_urlsafe(24)
         try:
-            create_user(session, payload.student_id, initial_password)
+            create_user(session, payload.student_id, payload.password)
         except IntegrityError:
             session.rollback()
             raise _api_error(409, "ACCOUNT_ALREADY_EXISTS", "Mã thí sinh đã được sử dụng")
         logger.info(
-            "participant_account_invited",
+            "participant_account_created",
             extra={"admin_id": user.student_id, "student_id": payload.student_id},
         )
-        return {"student_id": payload.student_id, "initial_password": initial_password}
+        return {"student_id": payload.student_id}
 
     @app.post("/api/submit")
     def submit(

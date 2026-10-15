@@ -58,7 +58,7 @@ Mở `http://localhost:8080`. Nginx phục vụ `/static/` và JSON dưới `/ap
 1. Đẩy repository lên GitHub, sau đó trong Render chọn **New > Blueprint** và kết nối repository.
 2. Trước khi tạo service, nhập `OTTV2_BOOTSTRAP_ADMIN_ID` (3–32 ký tự chữ/số/gạch dưới/gạch ngang) và `OTTV2_BOOTSTRAP_ADMIN_PASSWORD` (ít nhất 12 ký tự) trong các biến môi trường được yêu cầu. Dùng mật khẩu dài, ngẫu nhiên và riêng cho demo.
 3. Render tự sinh `OTTV2_SECRET_KEY`. Blueprint đặt `OTTV2_DEMO_MODE=1`, SQLite cục bộ và không bật remote sandbox. Chờ deploy rồi kiểm tra `/healthz`.
-4. Đăng nhập bằng tài khoản bootstrap. Trong **Mời thí sinh**, nhập mã tài khoản; mật khẩu ngẫu nhiên chỉ hiển thị một lần. Gửi thông tin đăng nhập riêng cho người được mời. Admin hiện có không bị thay đổi mật khẩu khi service khởi động lại.
+4. Đăng nhập bằng tài khoản bootstrap. Dùng các trang **Bảng xếp hạng**, **Nộp bot**, **Hồ sơ & ván đấu**; trang **Quản trị** chỉ hiện trong điều hướng khi đăng nhập bằng admin. Trong trang Quản trị, nhập mã thí sinh và tự đặt mật khẩu tối thiểu 8 ký tự, sau đó gửi thông tin đăng nhập cho thí sinh qua kênh riêng. Admin hiện có không bị thay đổi mật khẩu khi service khởi động lại.
 
 Không có self-registration và chỉ admin được mời tài khoản participant. **Cảnh báo an toàn:** bot của người tham gia chạy trong subprocess của cùng một web service; chúng không được chạy trong container riêng biệt. AST scan/restricted builtins không phải biên bảo mật đáng tin cậy. Chỉ mời người tin tưởng và không đưa dữ liệu bí mật vào demo. Với bot không tin cậy, dùng cấu hình production và worker container cô lập; các biến deploy mặc định bên ngoài Blueprint demo vẫn giữ nguyên chế độ remote opt-in như trước.
 
