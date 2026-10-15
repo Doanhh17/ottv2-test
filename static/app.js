@@ -18,6 +18,8 @@
     replayIndex: 0,
     playTimer: null,
     replays: [],
+    adminControlLoading: false,
+    adminPollTimer: null,
   };
 
   const byId = (id) => document.getElementById(id);
@@ -175,7 +177,7 @@
     ui.leaderboardError.classList.add("hidden");
     renderLoadingRows();
     try {
-      const { data, response, notModified } = await api(path, { headers });
+      const { data, response, notModified } = await api(path, { headers, cache: "no-cache" });
       if (notModified) {
         state.entries = state.leaderboardCache.get(cacheKey) || [];
       } else {
@@ -303,7 +305,12 @@
     ui.adminAccessMessage?.classList.toggle("hidden", state.isAdmin);
     updateSubmitLock();
     loadPrivateData();
-    if (state.isAdmin && ui.adminTools) loadAdminControl();
+    if (state.isAdmin && ui.adminTools) {
+      loadAdminControl();
+      if (state.adminPollTimer === null) {
+        state.adminPollTimer = window.setInterval(loadAdminControl, 2000);
+      }
+    }
     renderLeaderboard();
   }
 
@@ -311,6 +318,10 @@
     state.studentId = "";
     state.isAdmin = false;
     state.csrf = "";
+    if (state.adminPollTimer !== null) {
+      window.clearInterval(state.adminPollTimer);
+      state.adminPollTimer = null;
+    }
     try {
       sessionStorage.removeItem("ottv2-user");
     } catch (error) {
@@ -405,7 +416,8 @@
   }
 
   async function loadAdminControl() {
-    if (!state.isAdmin || !ui.adminTools) return;
+    if (!state.isAdmin || !ui.adminTools || state.adminControlLoading) return;
+    state.adminControlLoading = true;
     try {
       const { data } = await api("/admin/control");
       state.adminControl = data;
@@ -414,13 +426,19 @@
       byId("admin-run-status").classList.toggle("is-running", data.status === "RUNNING");
       ui.adminLockToggle.textContent = data.locked ? "Mở nhận bài" : "Khóa nhận bài";
       ui.adminLockToggle.classList.toggle("is-locked", data.locked);
-      ui.adminScore.disabled = !data.locked || data.status === "RUNNING";
-      ui.adminPublish.disabled = !["COMPLETED", "PARTIAL"].includes(data.status) || data.published;
-      ui.adminFeedback.textContent = data.locked
-        ? data.lock_reason || "Đang khóa nhận bài."
-        : "Đang nhận bài. Khóa thủ công trước khi chấm.";
+      ui.adminScore.disabled = !data.locked || data.status === "RUNNING" || !data.score_available;
+      ui.adminPublish.disabled = !["COMPLETED", "PARTIAL"].includes(data.status) || data.published || !data.publish_available;
+      ui.adminFeedback.textContent = ["COMPLETED", "PARTIAL"].includes(data.status) && !data.published
+        ? "Chấm xong. Có thể công bố bảng xếp hạng."
+        : data.status === "RUNNING"
+          ? "Đang chấm bài. Trạng thái sẽ tự cập nhật; có thể công bố khi hoàn tất."
+        : data.locked
+          ? data.lock_reason || "Đang khóa nhận bài."
+          : "Đang nhận bài. Khóa thủ công trước khi chấm.";
     } catch (error) {
       ui.adminFeedback.textContent = error.message;
+    } finally {
+      state.adminControlLoading = false;
     }
   }
 
@@ -436,6 +454,7 @@
       ui.adminFeedback.textContent = successMessage;
       await loadStatus();
       await loadAdminControl();
+      if (path.startsWith("/admin/publish")) await loadLeaderboard(true);
       if (data.run_id) showToast(`Đã tạo lượt chấm ${data.run_id.slice(0, 8)}.`);
       else showToast(successMessage);
     } catch (error) {
@@ -541,7 +560,7 @@
       button.dataset.gameId = replay.game_id;
       button.setAttribute("aria-label", `${replay.stage}, ${replay.result}, ${replay.plies} nước`);
       button.append(makeText("span", "replay-item-title", replay.stage));
-      button.append(makeText("span", "replay-item-meta", `${replay.opponent} · ${replay.plies} ply`));
+      button.append(makeText("span", "replay-item-meta", `${replay.opponent} · ${replay.plies} nước`));
       button.append(makeText("span", "replay-item-outcome", replay.result));
       button.addEventListener("click", () => loadReplay(replay.game_id, button));
       ui.replayList.append(button);
@@ -560,7 +579,9 @@
       byId("replay-stage-label").textContent = candidate?.stage || "REPLAY";
       byId("replay-match-title").textContent = `${candidate?.opponent || "Ván đấu"} · Ngày ${candidate?.day_no || "—"}`;
       byId("replay-result").textContent = candidate?.result?.toLocaleUpperCase("vi-VN") || (data.result === "DRAW" ? "HÒA" : data.result);
-      byId("win-reason").textContent = data.win_reason || "Ván đấu đã kết thúc.";
+      byId("win-reason").textContent = state.replayFrames.length < 2
+        ? `Không có nước đi để phát: ván kết thúc trước nước đầu tiên. ${data.win_reason || ""}`.trim()
+        : data.win_reason || "Ván đấu đã kết thúc.";
       byId("captured-label").textContent = `Đã ăn: P1 ${data.captured_p1} · P2 ${data.captured_p2}`;
       ui.slider.max = String(Math.max(0, state.replayFrames.length - 1));
       ui.slider.value = "0";
@@ -568,10 +589,46 @@
       ui.playToggle.disabled = state.replayFrames.length < 2;
       byId("step-back").disabled = true;
       byId("step-forward").disabled = state.replayFrames.length < 2;
+      renderReplayMoves();
       drawCurrentFrame();
     } catch (error) {
       showToast(error.message, true);
     }
+  }
+
+  function renderReplayMoves() {
+    const list = byId("replay-move-list");
+    list.replaceChildren();
+    const moves = state.replayFrames.slice(1);
+    if (!moves.length) {
+      list.append(makeText("li", "replay-empty", "Ván này không ghi nhận nước đi nào."));
+      return;
+    }
+    moves.forEach((frame) => {
+      const [from, to] = frame.move;
+      const player = frame.ply % 2 === 1 ? 1 : 2;
+      const fromSquare = `${"abcdefghi"[from[1]]}${from[0] + 1}`;
+      const toSquare = `${"abcdefghi"[to[1]]}${to[0] + 1}`;
+      const item = document.createElement("li");
+      const button = makeText(
+        "button",
+        "replay-move",
+        `Nước ${frame.ply} · Phe ${player} · ${fromSquare} → ${toSquare}`,
+      );
+      button.type = "button";
+      button.dataset.ply = String(frame.ply);
+      button.setAttribute(
+        "aria-label",
+        `Xem nước ${frame.ply}, phe ${player}, từ ${fromSquare} đến ${toSquare}`,
+      );
+      button.addEventListener("click", () => {
+        stopReplay();
+        state.replayIndex = frame.ply;
+        drawCurrentFrame();
+      });
+      item.append(button);
+      list.append(item);
+    });
   }
 
   function drawCurrentFrame() {
@@ -580,11 +637,16 @@
     const frame = state.replayFrames[state.replayIndex];
     drawBoard(frame);
     ui.slider.value = String(state.replayIndex);
-    byId("ply-label").textContent = `${frame.ply} / ${state.replayFrames.length - 1}`;
+    byId("ply-label").textContent = state.replayFrames.length < 2
+      ? "Không có nước đi"
+      : `Nước ${frame.ply} / ${state.replayFrames.length - 1}`;
     byId("step-back").disabled = state.replayIndex === 0;
     byId("step-forward").disabled = state.replayIndex >= state.replayFrames.length - 1;
     ui.playToggle.textContent = state.playTimer ? "Ⅱ" : "▶";
     ui.playToggle.setAttribute("aria-label", state.playTimer ? "Tạm dừng replay" : "Phát replay");
+    byId("replay-move-list").querySelectorAll(".replay-move").forEach((button) => {
+      button.classList.toggle("is-current", Number(button.dataset.ply) === frame.ply);
+    });
   }
 
   function drawBoard(frame) {
@@ -636,6 +698,7 @@
   }
 
   function toggleReplay() {
+    if (state.replayFrames.length < 2) return;
     if (state.playTimer) return stopReplay();
     if (state.replayIndex >= state.replayFrames.length - 1) state.replayIndex = 0;
     state.playTimer = window.setInterval(() => {
@@ -738,6 +801,12 @@
 
   function bindEvents() {
     const on = (element, eventName, handler) => element?.addEventListener(eventName, handler);
+    on(document, "visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      loadStatus();
+      if (state.isAdmin) loadAdminControl();
+      if (ui.leaderboardRows) loadLeaderboard(true);
+    });
     on(ui.loginOpen, "click", () => ui.loginDialog.showModal());
     on(byId("login-close"), "click", () => ui.loginDialog.close());
     on(ui.loginDialog, "click", (event) => { if (event.target === ui.loginDialog) ui.loginDialog.close(); });
@@ -807,7 +876,7 @@
       if (event.key === "/" && ui.leaderboardSearch && !ui.loginDialog?.open) { event.preventDefault(); ui.leaderboardSearch.focus(); }
       if (event.key === "ArrowLeft") stepReplay(-1);
       if (event.key === "ArrowRight") stepReplay(1);
-      if (event.code === "Space" && state.replayFrames.length) { event.preventDefault(); toggleReplay(); }
+      if (event.code === "Space" && state.replayFrames.length > 1) { event.preventDefault(); toggleReplay(); }
     });
   }
 

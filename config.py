@@ -41,8 +41,8 @@ INITIAL_LAYOUT_P1: Final[tuple[tuple[tuple[int, int], str], ...]] = (
     ((3, 0), "S"),
 )
 
-BOT_MOVE_TIMEOUT_SECONDS: Final[float] = 0.2
-BOT_GAME_TIMEOUT_SECONDS: Final[float] = 10.0
+BOT_MOVE_TIMEOUT_SECONDS: Final[float] = 30.0
+BOT_GAME_TIMEOUT_SECONDS: Final[float] = 30.0
 BOT_MEMORY_LIMIT_BYTES: Final[int] = 256 * 1024 * 1024
 BOT_FILE_SIZE_BYTES: Final[int] = 100 * 1024
 BOT_MAX_OPEN_FILES: Final[int] = 16

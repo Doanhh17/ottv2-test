@@ -243,6 +243,10 @@ kbd { padding: 1px 4px; border: 1px solid var(--line); border-radius: 3px; color
 .camp-dot { width: 7px; height: 7px; border-radius: 50%; }
 .camp-one { background: var(--jade); }
 .camp-two { background: var(--coral); }
+.piece-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 13px; width: min(100%, 510px); margin: 10px auto 0; color: var(--muted); font-size: 9px; }
+.piece-legend strong { color: var(--ink); }
+.piece-legend b { color: var(--jade); font-family: var(--mono); }
+.piece-rules { flex-basis: 100%; text-align: center; }
 .replay-controls { display: grid; grid-template-columns: 30px 36px 30px minmax(60px, 1fr) auto 60px; align-items: center; gap: 8px; width: min(100%, 510px); margin: 15px auto 0; }
 .control-button { width: 29px; height: 29px; }
 .play-button { display: grid; place-items: center; width: 35px; height: 35px; border: 0; border-radius: 50%; background: var(--jade); color: #fff; font-size: 13px; cursor: pointer; }
@@ -250,6 +254,12 @@ kbd { padding: 1px 4px; border: 1px solid var(--line); border-radius: 3px; color
 .replay-slider { width: 100%; accent-color: var(--jade); }
 .ply-label { color: var(--muted); font-family: var(--mono); font-size: 8px; white-space: nowrap; }
 .speed-select { width: 60px; height: 29px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); font-family: var(--mono); font-size: 9px; }
+.replay-history { width: min(100%, 510px); margin: 14px auto 0; }
+.replay-history h4 { margin: 0 0 7px; color: var(--muted); font-size: 9px; font-weight: 600; }
+.replay-move-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 4px; max-height: 150px; margin: 0; padding: 0 4px 0 0; overflow-y: auto; list-style: none; }
+.replay-move { width: 100%; padding: 6px 7px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); color: var(--ink); text-align: left; font-size: 9px; cursor: pointer; }
+.replay-move:hover, .replay-move.is-current { border-color: var(--jade); background: var(--jade-soft); }
+.replay-empty { grid-column: 1 / -1; padding: 7px 0; color: var(--muted); font-size: 9px; }
 .win-reason { min-height: 17px; margin: 9px 0 0; color: var(--muted); text-align: center; font-size: 9px; }
 
 .guide-section { padding: 32px 0 34px; border-top: 1px solid var(--line-strong); }

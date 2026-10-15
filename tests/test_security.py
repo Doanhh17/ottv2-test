@@ -2,6 +2,7 @@
 
 import json
 
+import config
 from benchmark_bots import GreedyBot, RandomBot, RushBot
 from engine import OTTGame
 from sandbox import BotSandbox, run_bot, scan_bot_source
@@ -47,17 +48,44 @@ def test_scanner_rejects_syntax_errors_and_missing_api() -> None:
     assert not scan_bot_source("def choose(board): return None\n").valid
 
 
-def test_worker_returns_a_legal_move() -> None:
+def test_worker_returns_a_legal_move_with_configured_game_timeout() -> None:
     game = OTTGame()
     state = game.to_state()
     valid_moves = game.get_valid_moves(1)
-    source = "def make_move(board, valid_moves, player):\n    return valid_moves[0]\n"
+    source = (
+        "def make_move(board, valid_moves, player):\n"
+        "    goal = (8, 8) if player == 1 else (0, 0)\n"
+        "    for move in valid_moves:\n"
+        "        if move[1] == goal:\n"
+        "            return move\n"
+        "    return valid_moves[0]\n"
+    )
 
-    result = run_bot(source, state.board, valid_moves, 1, timeout_seconds=5.0)
+    result = run_bot(
+        source,
+        state.board,
+        valid_moves,
+        1,
+        timeout_seconds=config.BOT_GAME_TIMEOUT_SECONDS,
+    )
 
     assert result.error is None
     assert result.move in valid_moves
     assert not result.timed_out
+
+
+def test_worker_startup_time_counts_against_timeout_budget() -> None:
+    game = OTTGame()
+    result = run_bot(
+        "def make_move(board, valid_moves, player): return valid_moves[0]\n",
+        game.to_state().board,
+        game.get_valid_moves(1),
+        1,
+        timeout_seconds=1e-9,
+    )
+
+    assert result.move is None
+    assert result.timed_out
 
 
 def test_container_worker_accepts_bounded_json_and_returns_json_move() -> None:

@@ -179,24 +179,33 @@ def run_bot(
     random_seed: int = config.BOT_RANDOM_SEED,
 ) -> BotExecutionResult:
     """Chạy bot trong tiến trình spawn riêng với giới hạn thời gian cứng."""
+    started_at = time.perf_counter()
+    if timeout_seconds <= 0:
+        return BotExecutionResult(None, "Thời gian chạy phải lớn hơn 0", 0.0)
     scan = scan_bot_source(source)
     if not scan.valid:
         return BotExecutionResult(None, "; ".join(scan.errors), 0.0)
-    if timeout_seconds <= 0:
-        return BotExecutionResult(None, "Thời gian chạy phải lớn hơn 0", 0.0)
+    if time.perf_counter() - started_at >= timeout_seconds:
+        return BotExecutionResult(
+            None,
+            "Bot vượt quá thời gian cho phép",
+            time.perf_counter() - started_at,
+            timed_out=True,
+        )
     if config.SANDBOX_URL:
         from remote_sandbox import RemoteSandboxError, execute_move
 
-        remote_started = time.perf_counter()
+        remote_timeout = timeout_seconds - (time.perf_counter() - started_at)
         try:
-            response, elapsed = execute_move(
+            response, _ = execute_move(
                 source,
                 board,
                 valid_moves,
                 player,
-                timeout_seconds,
+                remote_timeout,
                 random_seed,
             )
+            elapsed = time.perf_counter() - started_at
             if "move" not in response:
                 return BotExecutionResult(
                     None,
@@ -220,7 +229,7 @@ def run_bot(
                 return BotExecutionResult(None, "Remote worker trả nước đi không hợp lệ", elapsed)
             return BotExecutionResult(move, None, elapsed)
         except RemoteSandboxError as exc:
-            return BotExecutionResult(None, str(exc), time.perf_counter() - remote_started)
+            return BotExecutionResult(None, str(exc), time.perf_counter() - started_at)
 
     context = multiprocessing.get_context("spawn")
     receiver, sender = context.Pipe(duplex=False)
@@ -229,13 +238,14 @@ def run_bot(
         args=(sender, source, board, valid_moves, player, random_seed),
         daemon=True,
     )
-    started_at = time.perf_counter()
+    deadline = started_at + timeout_seconds
     try:
         process.start()
         sender.close()
-        process.join(timeout_seconds)
-        if process.is_alive():
-            process.kill()
+        startup_time_remaining = max(0.0, deadline - time.perf_counter())
+        if not receiver.poll(startup_time_remaining):
+            if process.is_alive():
+                process.kill()
             process.join()
             return BotExecutionResult(
                 None,
@@ -243,13 +253,31 @@ def run_bot(
                 time.perf_counter() - started_at,
                 timed_out=True,
             )
-        if not receiver.poll():
+        status, payload = receiver.recv()
+        if status != "started":
+            process.join(timeout=0.1)
             return BotExecutionResult(
                 None,
-                f"Tiến trình bot kết thúc bất thường (mã {process.exitcode})",
+                str(payload),
                 time.perf_counter() - started_at,
             )
+        execution_started_at = time.perf_counter()
+        execution_time_remaining = max(0.0, deadline - execution_started_at)
+        if not execution_time_remaining or not receiver.poll(execution_time_remaining):
+            if process.is_alive():
+                process.kill()
+            process.join()
+            return BotExecutionResult(
+                None,
+                "Bot vượt quá thời gian cho phép",
+                time.perf_counter() - started_at,
+                timed_out=True,
+            )
         status, payload = receiver.recv()
+        process.join(timeout=0.1)
+        if process.is_alive():
+            process.kill()
+            process.join()
         elapsed = time.perf_counter() - started_at
         if status != "ok":
             return BotExecutionResult(None, str(payload), elapsed)
@@ -276,6 +304,7 @@ def _bot_worker(
     """Áp giới hạn hệ điều hành rồi tải bot bằng builtins giới hạn."""
     try:
         _apply_resource_limits()
+        sender.send(("started", None))
         random.seed(random_seed)
         safe_builtins = _restricted_builtins()
         namespace: dict[str, Any] = {

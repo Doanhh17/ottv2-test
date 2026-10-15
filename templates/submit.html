@@ -3,7 +3,7 @@
 {% block content %}
   <section class="masthead">
     <div class="masthead-copy"><p class="eyebrow"><span class="eyebrow-dot"></span> KHU VỰC THÍ SINH</p><h1>Nộp bot</h1><p class="masthead-subtitle">Tải lên phiên bản bot Python để tham gia mùa giải.</p></div>
-    <div class="masthead-aside"><span class="aside-label">TÀI NGUYÊN MỖI LƯỢT</span><p class="resource-line"><strong>0,2 giây CPU</strong> · <strong>256 MB RAM</strong></p></div>
+    <div class="masthead-aside"><span class="aside-label">TÀI NGUYÊN MỖI VÁN</span><p class="resource-line"><strong>Tối đa 30 giây</strong> · <strong>256 MB RAM</strong></p></div>
   </section>
   <section class="submission-panel page-section standalone-panel" aria-labelledby="submission-title">
     <div class="panel-topline"><p class="eyebrow">TÀI KHOẢN THÍ SINH</p><span id="submission-status" class="small-status">CẦN ĐĂNG NHẬP</span></div>
@@ -38,6 +38,6 @@
     # Nếu chưa thể thắng ngay, trả về một nước hợp lệ.
     return valid_moves[0]</code></pre>
     <p class="guide-intro">Bắt buộc định nghĩa hàm đồng bộ <code>make_move(board, valid_moves, player)</code> và trả về một nước trong <code>valid_moves</code>. Mỗi quân trên bàn là <code>"1R"</code>, <code>"2S"</code>...; ô trống là <code>None</code>.</p>
-    <div class="limits-note"><strong>Giới hạn</strong><span>0,2 giây/nước · 10 giây/ván · RAM 256 MB · tệp 100 KB</span></div>
+    <div class="limits-note"><strong>Giới hạn demo</strong><span>30 giây/ván (tính cả thời gian khởi động Python) · RAM 256 MB · tệp 100 KB</span></div>
   </section>
 {% endblock %}
