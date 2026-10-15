@@ -134,9 +134,19 @@
     if (!ui.submitButton) return;
     const locked = !state.status || ["LOCKED", "RUNNING"].includes(state.status.status);
     const loggedIn = Boolean(state.studentId);
-    ui.submitButton.disabled = locked || !loggedIn || !ui.fileInput.files.length;
-    byId("submission-status").textContent = !loggedIn ? "CẦN ĐĂNG NHẬP" : locked ? "ĐANG KHÓA" : "SẴN SÀNG";
-    byId("submission-status").style.color = locked ? "var(--coral)" : loggedIn ? "var(--jade)" : "var(--muted)";
+    const cannotSubmit = state.isAdmin;
+    ui.submitButton.disabled = locked || !loggedIn || cannotSubmit || !ui.fileInput.files.length;
+    const statusElement = byId("submission-status");
+    if (statusElement) {
+      statusElement.textContent = cannotSubmit
+        ? "ADMIN KHÔNG NỘP BOT"
+        : !loggedIn
+          ? "CẦN ĐĂNG NHẬP"
+          : locked
+            ? "ĐANG KHÓA"
+            : "SẴN SÀNG";
+      statusElement.style.color = cannotSubmit || locked ? "var(--coral)" : loggedIn ? "var(--jade)" : "var(--muted)";
+    }
   }
 
   function renderLoadingRows() {
@@ -278,6 +288,14 @@
   function setLoggedIn(studentId, isAdmin = false) {
     state.studentId = studentId;
     state.isAdmin = Boolean(isAdmin);
+    try {
+      sessionStorage.setItem("ottv2-user", JSON.stringify({
+        student_id: studentId,
+        is_admin: state.isAdmin,
+      }));
+    } catch (error) {
+      showToast("Không thể lưu trạng thái đăng nhập trên trình duyệt.", true);
+    }
     ui.loginOpen?.classList.add("hidden");
     ui.logout?.classList.remove("hidden");
     ui.adminTools?.classList.toggle("hidden", !state.isAdmin);
@@ -293,6 +311,11 @@
     state.studentId = "";
     state.isAdmin = false;
     state.csrf = "";
+    try {
+      sessionStorage.removeItem("ottv2-user");
+    } catch (error) {
+      showToast("Không thể xóa trạng thái đăng nhập khỏi trình duyệt.", true);
+    }
     ui.loginOpen?.classList.remove("hidden");
     ui.logout?.classList.add("hidden");
     ui.adminTools?.classList.add("hidden");
@@ -327,7 +350,7 @@
   async function loadPrivateData() {
     if (!state.studentId) return;
     const loaders = [];
-    if (ui.submissionMeta) loaders.push(loadSubmission());
+    if (ui.submissionMeta && !state.isAdmin) loaders.push(loadSubmission());
     if (byId("personal-rank")) loaders.push(loadPersonalResults());
     if (ui.replayList) loaders.push(loadReplays());
     await Promise.allSettled(loaders);
@@ -674,6 +697,10 @@
 
   async function handleUpload(event) {
     event.preventDefault();
+    if (state.isAdmin) {
+      showToast("Tài khoản quản trị không thể nộp bot.", true);
+      return;
+    }
     const file = ui.fileInput.files[0];
     if (!file) return;
     if (!readCsrf()) return showToast("Hãy đăng nhập lại để nộp bài.", true);
@@ -791,12 +818,29 @@
     await loadStatus();
     if (ui.leaderboardRows) await loadLeaderboard();
     window.setInterval(loadStatus, 30000);
-    if (cookieValue("ottv2_session")) {
-      try {
-        const { data } = await api("/api/my/results");
-        setLoggedIn(data.student_id, data.is_admin);
-      } catch (error) {
+    let cachedUser = null;
+    try {
+      cachedUser = JSON.parse(sessionStorage.getItem("ottv2-user") || "null");
+    } catch (error) {
+      showToast("Không đọc được trạng thái đăng nhập đã lưu.", true);
+    }
+    if (
+      cachedUser &&
+      typeof cachedUser.student_id === "string" &&
+      typeof cachedUser.is_admin === "boolean"
+    ) {
+      setLoggedIn(cachedUser.student_id, cachedUser.is_admin);
+    }
+    try {
+      const { data } = await api("/api/my/results");
+      setLoggedIn(data.student_id, data.is_admin);
+    } catch (error) {
+      if (error.status === 401) {
         setLoggedOut();
+      } else if (!cachedUser) {
+        showToast("Chưa kiểm tra được phiên đăng nhập. Kiểm tra kết nối rồi tải lại.", true);
+      } else {
+        showToast("Đang giữ phiên đăng nhập; chưa kết nối được máy chủ.", true);
       }
     }
   }

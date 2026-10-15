@@ -60,6 +60,8 @@ Mở `http://localhost:8080`. Nginx phục vụ `/static/` và JSON dưới `/ap
 3. Render tự sinh `OTTV2_SECRET_KEY`. Blueprint đặt `OTTV2_DEMO_MODE=1`, SQLite cục bộ và không bật remote sandbox. Chờ deploy rồi kiểm tra `/healthz`.
 4. Đăng nhập bằng tài khoản bootstrap. Dùng các trang **Bảng xếp hạng**, **Nộp bot**, **Hồ sơ & ván đấu**; trang **Quản trị** chỉ hiện trong điều hướng khi đăng nhập bằng admin. Trong trang Quản trị, nhập mã thí sinh và tự đặt mật khẩu tối thiểu 8 ký tự, sau đó gửi thông tin đăng nhập cho thí sinh qua kênh riêng. Admin hiện có không bị thay đổi mật khẩu khi service khởi động lại.
 
+Trang **Nộp bot** kiểm tra tệp `.py` (UTF-8, tối đa 100 KiB), cú pháp và hàm `make_move(board, valid_moves, player)` mà không thực thi mã khi upload. Tài khoản admin chỉ quản trị, không nộp bot. Bot được thực thi trong lượt thi mới chịu giới hạn thời gian và bộ nhớ cấu hình trong `config.py`.
+
 Không có self-registration và chỉ admin được mời tài khoản participant. **Cảnh báo an toàn:** bot của người tham gia chạy trong subprocess của cùng một web service; chúng không được chạy trong container riêng biệt. AST scan/restricted builtins không phải biên bảo mật đáng tin cậy. Chỉ mời người tin tưởng và không đưa dữ liệu bí mật vào demo. Với bot không tin cậy, dùng cấu hình production và worker container cô lập; các biến deploy mặc định bên ngoài Blueprint demo vẫn giữ nguyên chế độ remote opt-in như trước.
 
 Render Free có thể ngủ và không cung cấp tính bền vững cho dữ liệu filesystem trong cấu hình này. Đây là demo tiện lợi, không phải production deployment.

@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
+import re
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -16,7 +17,7 @@ from db import create_database_engine, initialize_database
 from engine import OTTGame
 from models import DailyRank, Game, ReplayAccess, Submission, SystemSetting, TournamentRun
 from replays import ReplayStore
-from sandbox import BotExecutionResult
+from sandbox import scan_bot_source
 
 
 PASSWORD = "correct-horse-battery"
@@ -110,6 +111,9 @@ def test_pages_and_static_assets_are_served(tmp_path: Path) -> None:
             assert f'id="{expected_id}"' in page.text
             if path == "/admin":
                 assert "Đăng nhập bằng tài khoản quản trị" in page.text
+            if path == "/submit":
+                assert 'id="bot-sample"' in page.text
+                assert "def make_move(board, valid_moves, player):" in page.text
         assert stylesheet.status_code == 200
         assert "--jade" in stylesheet.text
         assert script.status_code == 200
@@ -117,6 +121,20 @@ def test_pages_and_static_assets_are_served(tmp_path: Path) -> None:
     finally:
         client.close()
         database_engine.dispose()
+
+
+def test_submission_page_bot_sample_passes_source_validation() -> None:
+    template = Path(__file__).parents[1] / "templates" / "submit.html"
+    markup = template.read_text(encoding="utf-8")
+    match = re.search(
+        r'<pre id="bot-sample"[^>]*><code>(.*?)</code></pre>',
+        markup,
+        flags=re.DOTALL,
+    )
+
+    assert match is not None
+    result = scan_bot_source(match.group(1))
+    assert result.valid, result.errors
 
 
 def test_login_sets_http_only_session_and_logout_requires_csrf(tmp_path: Path) -> None:
@@ -410,16 +428,27 @@ def test_admin_lock_blocks_submission_at_any_hour(tmp_path: Path) -> None:
         database_engine.dispose()
 
 
+def test_admin_cannot_submit_bot(tmp_path: Path) -> None:
+    client, database_engine, _, _, _ = make_client(tmp_path)
+    try:
+        csrf = login(client, "charlie")
+        response = client.post(
+            "/api/submit",
+            files={"file": ("bot.py", b"def make_move(board, valid_moves, player): return valid_moves[0]")},
+            headers={"X-CSRF-Token": csrf},
+        )
+
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "ADMIN_CANNOT_SUBMIT"
+    finally:
+        client.close()
+        database_engine.dispose()
+
+
 def test_valid_upload_is_saved_atomically_with_hash_and_version(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     client, database_engine, submission_root, _, _ = make_client(tmp_path)
-    monkeypatch.setattr(
-        app_module,
-        "run_bot",
-        lambda *args, **kwargs: BotExecutionResult(args[2][0], None, 0.01),
-    )
     try:
         csrf = login(client, "alpha")
         source = b"def make_move(board, valid_moves, player): return valid_moves[0]"
@@ -434,6 +463,26 @@ def test_valid_upload_is_saved_atomically_with_hash_and_version(
         assert len(response.json()["sha256"]) == 64
         assert (submission_root / "alpha.py").read_bytes() == source
         assert (submission_root / "alpha" / "version_1.py").read_bytes() == source
+    finally:
+        client.close()
+        database_engine.dispose()
+
+
+def test_upload_validates_bot_api_without_running_it(tmp_path: Path, monkeypatch) -> None:
+    client, database_engine, _, _, _ = make_client(tmp_path)
+
+    def unexpected_run(*args, **kwargs):
+        raise AssertionError("Upload validation must not execute participant code")
+
+    monkeypatch.setattr(app_module, "run_bot", unexpected_run)
+    try:
+        csrf = login(client, "alpha")
+        response = client.post(
+            "/api/submit",
+            files={"file": ("bot.py", b"def make_move(board, valid_moves, player): return valid_moves[0]")},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert response.status_code == 200
     finally:
         client.close()
         database_engine.dispose()

@@ -594,6 +594,7 @@ body { font-size: 16px; }
 .standalone-panel { max-width: 900px; padding: 25px; }
 .personal-panel.standalone-panel { padding: 23px; }
 .page-footer b { font-size: 11px; }
+.submission-code { overflow: auto; margin: 14px 0; padding: 16px; border: 1px solid var(--line); border-left: 3px solid var(--jade); background: var(--surface); color: var(--ink); font: 13px/1.65 var(--mono); }
 
 @media (max-width: 1050px) {
   .topbar { flex-wrap: wrap; padding-top: 9px; padding-bottom: 9px; }

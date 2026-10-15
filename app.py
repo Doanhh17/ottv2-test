@@ -438,8 +438,10 @@ def create_app(
         user: User = Depends(current_user),
         session: Session = Depends(database_session),
     ) -> dict[str, Any]:
-        """Kiểm tra, chạy thử và ghi phiên bản bot riêng tư theo atomic replace."""
+        """Kiểm tra mã nguồn và ghi phiên bản bot riêng tư theo atomic replace."""
         require_csrf(request)
+        if user.is_admin:
+            raise _api_error(403, "ADMIN_CANNOT_SUBMIT", "Tài khoản quản trị không thể nộp bot")
         if not app.state.submit_limiter.allow(f"student:{user.student_id}"):
             raise _api_error(
                 429,
@@ -466,24 +468,6 @@ def create_app(
                 "BOT_VALIDATION_FAILED",
                 "Tệp bot không hợp lệ",
                 details=list(scan.errors),
-            )
-
-        game = OTTGame()
-        board = game.to_state().board
-        valid_moves = game.get_valid_moves(1)
-        smoke_result = run_bot(
-            source,
-            board,
-            valid_moves,
-            1,
-            timeout_seconds=config.BOT_MOVE_TIMEOUT_SECONDS,
-        )
-        if smoke_result.error is not None:
-            raise _api_error(
-                422,
-                "BOT_SMOKE_TEST_FAILED",
-                "Bot không vượt qua lượt chạy thử",
-                details=[smoke_result.error],
             )
 
         student_id = user.student_id
